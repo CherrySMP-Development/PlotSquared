@@ -29,6 +29,8 @@ import com.plotsquared.core.location.Location;
 import com.plotsquared.core.permissions.Permission;
 import com.plotsquared.core.permissions.PermissionHandler;
 import com.plotsquared.core.player.ConsolePlayer;
+import com.plotsquared.core.player.MetaDataAccess;
+import com.plotsquared.core.player.PlayerMetaDataKeys;
 import com.plotsquared.core.player.PlotPlayer;
 import com.plotsquared.core.plot.PlotWeather;
 import com.plotsquared.core.plot.world.PlotAreaManager;
@@ -268,6 +270,15 @@ public class BukkitPlayer extends PlotPlayer<Player> {
 
     @Override
     public Location getLocationFull() {
+        if (FoliaCompat.isFolia() && !FoliaCompat.isOwnedByCurrentRegion(this.player)) {
+            try (final MetaDataAccess<Location> locationAccess =
+                         this.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LOCATION)) {
+                final Location cachedLocation = locationAccess.get().orElse(null);
+                if (cachedLocation != null) {
+                    return cachedLocation;
+                }
+            }
+        }
         return this.callOnPlayer(player -> BukkitUtil.adaptComplete(player.getLocation()));
     }
 

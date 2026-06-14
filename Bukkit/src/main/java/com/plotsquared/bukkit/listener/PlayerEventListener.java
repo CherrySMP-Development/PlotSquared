@@ -536,6 +536,10 @@ public class PlayerEventListener implements Listener {
         final Player player = event.getPlayer();
         PlotSquared.platform().playerManager().removePlayer(player.getUniqueId());
         final PlotPlayer<Player> pp = BukkitUtil.adapt(player);
+        try (final MetaDataAccess<Location> lastLocationAccess =
+                     pp.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LOCATION)) {
+            lastLocationAccess.set(BukkitUtil.adaptComplete(player.getLocation()));
+        }
 
         // we're stripping the country code as we don't want to differ between countries
         pp.setLocale(Locale.forLanguageTag(player.getLocale().substring(0, 2)));
@@ -599,6 +603,10 @@ public class PlayerEventListener implements Listener {
             org.bukkit.Location to = event.getTo();
             //noinspection ConstantConditions
             if (to != null) {
+                try (final MetaDataAccess<Location> lastLocationAccess =
+                             pp.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LOCATION)) {
+                    lastLocationAccess.set(BukkitUtil.adaptComplete(to));
+                }
                 Location location = BukkitUtil.adapt(to);
                 PlotArea area = location.getPlotArea();
                 if (area == null) {
@@ -737,7 +745,7 @@ public class PlayerEventListener implements Listener {
             Location location = BukkitUtil.adapt(to);
             try (final MetaDataAccess<Location> lastLocationAccess =
                          pp.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LOCATION)) {
-                lastLocationAccess.remove();
+                lastLocationAccess.set(BukkitUtil.adaptComplete(to));
             }
             PlotArea area = location.getPlotArea();
             if (area == null) {
@@ -856,7 +864,7 @@ public class PlayerEventListener implements Listener {
             Location location = BukkitUtil.adapt(to);
             try (final MetaDataAccess<Location> lastLocationAccess =
                          pp.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LOCATION)) {
-                lastLocationAccess.set(location);
+                lastLocationAccess.set(BukkitUtil.adaptComplete(to));
             }
             PlotArea area = location.getPlotArea();
             if (area == null) {

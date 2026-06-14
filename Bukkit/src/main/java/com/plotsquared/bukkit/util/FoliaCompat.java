@@ -86,6 +86,30 @@ public final class FoliaCompat {
         }
     }
 
+    public static boolean isOwnedByCurrentRegion(final @NonNull Entity entity) {
+        check();
+        if (!folia || bukkit_isOwnedByCurrentRegionEntity == null) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(bukkit_isOwnedByCurrentRegionEntity.invoke(null, entity));
+        } catch (final ReflectiveOperationException ignored) {
+            return false;
+        }
+    }
+
+    public static boolean isOwnedByCurrentRegion(final @NonNull Location location) {
+        check();
+        if (!folia || bukkit_isOwnedByCurrentRegionLocation == null) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(bukkit_isOwnedByCurrentRegionLocation.invoke(null, location));
+        } catch (final ReflectiveOperationException ignored) {
+            return false;
+        }
+    }
+
     public static void runGlobal(final @NonNull JavaPlugin plugin, final @NonNull Runnable task) {
         if (!isFolia()) {
             Bukkit.getScheduler().runTask(plugin, task);
@@ -404,30 +428,6 @@ public final class FoliaCompat {
 
     private static @NonNull Consumer<Object> consumer(final @NonNull Runnable runnable) {
         return ignored -> runnable.run();
-    }
-
-    private static boolean isOwnedByCurrentRegion(final @NonNull Entity entity) {
-        check();
-        if (!folia || bukkit_isOwnedByCurrentRegionEntity == null) {
-            return false;
-        }
-        try {
-            return Boolean.TRUE.equals(bukkit_isOwnedByCurrentRegionEntity.invoke(null, entity));
-        } catch (final ReflectiveOperationException ignored) {
-            return false;
-        }
-    }
-
-    private static boolean isOwnedByCurrentRegion(final @NonNull Location location) {
-        check();
-        if (!folia || bukkit_isOwnedByCurrentRegionLocation == null) {
-            return false;
-        }
-        try {
-            return Boolean.TRUE.equals(bukkit_isOwnedByCurrentRegionLocation.invoke(null, location));
-        } catch (final ReflectiveOperationException ignored) {
-            return false;
-        }
     }
 
     private static long ticksToMillis(final long ticks) {
