@@ -187,6 +187,7 @@ public class BukkitQueueCoordinator extends BasicQueueCoordinator {
                         }
                     }
                 }
+                java.util.Map<BiomeType, org.bukkit.block.Biome> biomeCache = new java.util.HashMap<>();
                 for (int layer = 0; layer < localChunk.getBiomes().length; layer++) {
                     BiomeType[] biomesLayer = localChunk.getBiomes()[layer];
                     if (biomesLayer == null) {
@@ -201,7 +202,7 @@ public class BukkitQueueCoordinator extends BasicQueueCoordinator {
                             int x = sx + ChunkUtil.getX(j);
                             int y = ChunkUtil.getY(layer, j);
                             int z = sz + ChunkUtil.getZ(j);
-                            getWorld().setBiome(BlockVector3.at(x, y, z), biome);
+                            getBukkitWorld().setBiome(x, y, z, biomeCache.computeIfAbsent(biome, BukkitAdapter::adapt));
                         }
                     }
                 }
@@ -291,8 +292,8 @@ public class BukkitQueueCoordinator extends BasicQueueCoordinator {
             } else {
                 existing = getBukkitWorld().getBlockAt(x, y, z);
             }
-            final BlockState existingBaseBlock = BukkitAdapter.adapt(existing.getBlockData());
-            if (BukkitBlockUtil.get(existing).equals(existingBaseBlock) && existing.getBlockData().matches(blockData)) {
+            BlockData existingData = existing.getBlockData();
+            if (!block.hasNbtData() && existingData.matches(blockData)) {
                 return;
             }
 
@@ -319,8 +320,8 @@ public class BukkitQueueCoordinator extends BasicQueueCoordinator {
         } else {
             existing = getBukkitWorld().getBlockAt(x, y, z);
         }
-        final BlockState existingBaseBlock = BukkitAdapter.adapt(existing.getBlockData());
-        if (BukkitBlockUtil.get(existing).equals(existingBaseBlock) && existing.getBlockData().matches(blockData)) {
+        BlockData existingData = existing.getBlockData();
+        if (!block.hasNbtData() && existingData.matches(blockData)) {
             return;
         }
         if (existing.getState() instanceof Container) {
