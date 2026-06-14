@@ -47,6 +47,8 @@ public final class FoliaCompat {
     private static boolean folia;
 
     private static Method bukkit_isGlobalTickThread;
+    private static Method bukkit_isOwnedByCurrentRegionEntity;
+    private static Method bukkit_isOwnedByCurrentRegionLocation;
     private static Method server_getGlobalRegionScheduler;
     private static Method server_getAsyncScheduler;
     private static Method server_getRegionScheduler;
@@ -194,6 +196,10 @@ public final class FoliaCompat {
             Bukkit.getScheduler().runTask((JavaPlugin) plugin, task);
             return;
         }
+        if (isOwnedByCurrentRegion(location)) {
+            task.run();
+            return;
+        }
         try {
             final Object scheduler = server_getRegionScheduler.invoke(Bukkit.getServer());
             region_run.invoke(scheduler, plugin, location, consumer(task));
@@ -232,6 +238,10 @@ public final class FoliaCompat {
             Bukkit.getScheduler().runTask((JavaPlugin) plugin, task);
             return;
         }
+        if (isOwnedByCurrentRegion(entity)) {
+            task.run();
+            return;
+        }
         try {
             final Object scheduler = entity_getScheduler.invoke(entity);
             entityScheduler_run.invoke(scheduler, plugin, consumer(task), null);
@@ -246,6 +256,9 @@ public final class FoliaCompat {
             final @NonNull Function<Entity, T> task
     ) throws ExecutionException, InterruptedException {
         if (!isFolia()) {
+            return task.apply(entity);
+        }
+        if (isOwnedByCurrentRegion(entity)) {
             return task.apply(entity);
         }
         final CompletableFuture<T> future = new CompletableFuture<>();
@@ -302,6 +315,8 @@ public final class FoliaCompat {
             server_getAsyncScheduler = Bukkit.getServer().getClass().getMethod("getAsyncScheduler");
             server_getRegionScheduler = Bukkit.getServer().getClass().getMethod("getRegionScheduler");
             bukkit_isGlobalTickThread = findStaticNoArgsMethod(Bukkit.class, "isGlobalTickThread");
+            bukkit_isOwnedByCurrentRegionEntity = findMethod(Bukkit.class, "isOwnedByCurrentRegion", Entity.class);
+            bukkit_isOwnedByCurrentRegionLocation = findMethod(Bukkit.class, "isOwnedByCurrentRegion", Location.class);
 
             final Object globalScheduler = server_getGlobalRegionScheduler.invoke(Bukkit.getServer());
             final Object asyncScheduler = server_getAsyncScheduler.invoke(Bukkit.getServer());
@@ -389,6 +404,30 @@ public final class FoliaCompat {
 
     private static @NonNull Consumer<Object> consumer(final @NonNull Runnable runnable) {
         return ignored -> runnable.run();
+    }
+
+    private static boolean isOwnedByCurrentRegion(final @NonNull Entity entity) {
+        check();
+        if (!folia || bukkit_isOwnedByCurrentRegionEntity == null) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(bukkit_isOwnedByCurrentRegionEntity.invoke(null, entity));
+        } catch (final ReflectiveOperationException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isOwnedByCurrentRegion(final @NonNull Location location) {
+        check();
+        if (!folia || bukkit_isOwnedByCurrentRegionLocation == null) {
+            return false;
+        }
+        try {
+            return Boolean.TRUE.equals(bukkit_isOwnedByCurrentRegionLocation.invoke(null, location));
+        } catch (final ReflectiveOperationException ignored) {
+            return false;
+        }
     }
 
     private static long ticksToMillis(final long ticks) {
