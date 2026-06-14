@@ -55,6 +55,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.concurrent.ExecutionException;
 import java.util.Set;
 import java.util.UUID;
 
@@ -126,16 +127,18 @@ public class BukkitPlayer extends PlotPlayer<Player> {
         if (!WorldUtil.isValidLocation(location)) {
             return false;
         }
-        final org.bukkit.Location to = BukkitUtil.adapt(location);
-        final org.bukkit.Location from = player.getLocation();
-        PlayerTeleportEvent event = new PlayerTeleportEvent(player, from, to);
-        callEvent(event);
-        if (event.isCancelled() || !event.getTo().equals(to)) {
-            return false;
-        }
-        event = new PlayerTeleportEvent(player, to, from);
-        callEvent(event);
-        return true;
+        return this.callOnPlayer(player -> {
+            final org.bukkit.Location to = BukkitUtil.adapt(location);
+            final org.bukkit.Location from = player.getLocation();
+            PlayerTeleportEvent event = new PlayerTeleportEvent(player, from, to);
+            callEvent(event);
+            if (event.isCancelled() || !event.getTo().equals(to)) {
+                return false;
+            }
+            event = new PlayerTeleportEvent(player, to, from);
+            callEvent(event);
+            return true;
+        });
     }
 
     private void callEvent(final @NonNull Event event) {
@@ -252,89 +255,104 @@ public class BukkitPlayer extends PlotPlayer<Player> {
 
     @Override
     public void setCompassTarget(Location location) {
-        this.player.setCompassTarget(
-                new org.bukkit.Location(BukkitUtil.getWorld(location.getWorldName()), location.getX(),
-                        location.getY(), location.getZ()
-                ));
+        final org.bukkit.Location compassTarget = new org.bukkit.Location(
+                BukkitUtil.getWorld(location.getWorldName()),
+                location.getX(),
+                location.getY(),
+                location.getZ()
+        );
+        this.runOnPlayer(player -> player.setCompassTarget(compassTarget));
     }
 
     @Override
     public Location getLocationFull() {
-        return BukkitUtil.adaptComplete(this.player.getLocation());
+        return this.callOnPlayer(player -> BukkitUtil.adaptComplete(player.getLocation()));
     }
 
     @Override
     public void setWeather(final @NonNull PlotWeather weather) {
-        switch (weather) {
-            case CLEAR -> this.player.setPlayerWeather(WeatherType.CLEAR);
-            case RAIN -> this.player.setPlayerWeather(WeatherType.DOWNFALL);
-            case WORLD -> this.player.resetPlayerWeather();
-            default -> {
-                //do nothing as this is PlotWeather.OFF
+        this.runOnPlayer(player -> {
+            switch (weather) {
+                case CLEAR -> player.setPlayerWeather(WeatherType.CLEAR);
+                case RAIN -> player.setPlayerWeather(WeatherType.DOWNFALL);
+                case WORLD -> player.resetPlayerWeather();
+                default -> {
+                    // do nothing as this is PlotWeather.OFF
+                }
             }
-        }
+        });
     }
 
     @Override
     public com.sk89q.worldedit.world.gamemode.GameMode getGameMode() {
-        return switch (this.player.getGameMode()) {
+        return this.callOnPlayer(player -> switch (player.getGameMode()) {
             case ADVENTURE -> ADVENTURE;
             case CREATIVE -> CREATIVE;
             case SPECTATOR -> SPECTATOR;
             default -> SURVIVAL;
-        };
+        });
     }
 
     @Override
     public void setGameMode(final com.sk89q.worldedit.world.gamemode.GameMode gameMode) {
-        if (ADVENTURE.equals(gameMode)) {
-            this.player.setGameMode(GameMode.ADVENTURE);
-        } else if (CREATIVE.equals(gameMode)) {
-            this.player.setGameMode(GameMode.CREATIVE);
-        } else if (SPECTATOR.equals(gameMode)) {
-            this.player.setGameMode(GameMode.SPECTATOR);
-        } else {
-            this.player.setGameMode(GameMode.SURVIVAL);
-        }
+        this.runOnPlayer(player -> {
+            if (ADVENTURE.equals(gameMode)) {
+                player.setGameMode(GameMode.ADVENTURE);
+            } else if (CREATIVE.equals(gameMode)) {
+                player.setGameMode(GameMode.CREATIVE);
+            } else if (SPECTATOR.equals(gameMode)) {
+                player.setGameMode(GameMode.SPECTATOR);
+            } else {
+                player.setGameMode(GameMode.SURVIVAL);
+            }
+        });
     }
 
     @Override
     public void setTime(final long time) {
-        if (time != Long.MAX_VALUE) {
-            this.player.setPlayerTime(time, false);
-        } else {
-            this.player.resetPlayerTime();
-        }
+        this.runOnPlayer(player -> {
+            if (time != Long.MAX_VALUE) {
+                player.setPlayerTime(time, false);
+            } else {
+                player.resetPlayerTime();
+            }
+        });
     }
 
     @Override
     public boolean getFlight() {
-        return player.getAllowFlight();
+        return this.callOnPlayer(Player::getAllowFlight);
     }
 
     @Override
     public void setFlight(boolean fly) {
-        this.player.setAllowFlight(fly);
+        this.runOnPlayer(player -> player.setAllowFlight(fly));
     }
 
     @Override
     public void playMusic(final @NonNull Location location, final @NonNull ItemType id) {
-        if (id == ItemTypes.AIR) {
-            if (MinecraftVersion.current().isOlderOrEqualThan(MinecraftVersion.THE_WILD_UPDATE)) {
-                player.stopSound(SoundCategory.MUSIC);
+        this.runOnPlayer(player -> {
+            if (id == ItemTypes.AIR) {
+                if (MinecraftVersion.current().isOlderOrEqualThan(MinecraftVersion.THE_WILD_UPDATE)) {
+                    player.stopSound(SoundCategory.MUSIC);
+                    return;
+                }
+                // 1.18 and downwards require a specific Sound to stop (even tho the packet does not??)
+                for (final Sound sound : Sound.values()) {
+                    if (sound.name().startsWith("MUSIC_DISC")) {
+                        player.stopSound(sound, SoundCategory.MUSIC);
+                    }
+                }
                 return;
             }
-            // 1.18 and downwards require a specific Sound to stop (even tho the packet does not??)
-            for (final Sound sound : Sound.values()) {
-                if (sound.name().startsWith("MUSIC_DISC")) {
-                    this.player.stopSound(sound, SoundCategory.MUSIC);
-                }
-            }
-            return;
-        }
-        this.player.playSound(BukkitUtil.adapt(location), Sound.valueOf(BukkitAdapter.adapt(id).name()),
-                SoundCategory.MUSIC, Float.MAX_VALUE, 1f
-        );
+            player.playSound(
+                    BukkitUtil.adapt(location),
+                    Sound.valueOf(BukkitAdapter.adapt(id).name()),
+                    SoundCategory.MUSIC,
+                    Float.MAX_VALUE,
+                    1f
+            );
+        });
     }
 
     @SuppressWarnings("deprecation") // Needed for Spigot compatibility
@@ -345,9 +363,11 @@ public class BukkitPlayer extends PlotPlayer<Player> {
 
     @Override
     public void stopSpectating() {
-        if (getGameMode() == SPECTATOR) {
-            this.player.setSpectatorTarget(null);
-        }
+        this.runOnPlayer(player -> {
+            if (player.getGameMode() == GameMode.SPECTATOR) {
+                player.setSpectatorTarget(null);
+            }
+        });
     }
 
     @Override
@@ -364,7 +384,7 @@ public class BukkitPlayer extends PlotPlayer<Player> {
     public void removeEffect(@NonNull String name) {
         PotionEffectType type = PotionEffectType.getByName(name);
         if (type != null) {
-            player.removePotionEffect(type);
+            this.runOnPlayer(player -> player.removePotionEffect(type));
         }
     }
 
@@ -373,7 +393,29 @@ public class BukkitPlayer extends PlotPlayer<Player> {
         if (other instanceof ConsolePlayer) {
             return true;
         } else {
-            return this.player.canSee(((BukkitPlayer) other).getPlatformPlayer());
+            return this.callOnPlayer(player -> player.canSee(((BukkitPlayer) other).getPlatformPlayer()));
+        }
+    }
+
+    private void runOnPlayer(final @NonNull java.util.function.Consumer<Player> task) {
+        FoliaCompat.runAtEntity(BukkitPlatform.getPlugin(BukkitPlatform.class), this.player, () -> task.accept(this.player));
+    }
+
+    private <T> T callOnPlayer(final @NonNull java.util.function.Function<Player, T> task) {
+        if (!FoliaCompat.isFolia()) {
+            return task.apply(this.player);
+        }
+        try {
+            return FoliaCompat.callAtEntity(
+                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                    this.player,
+                    entity -> task.apply((Player) entity)
+            );
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (final ExecutionException e) {
+            throw new RuntimeException(e.getCause() == null ? e : e.getCause());
         }
     }
 
