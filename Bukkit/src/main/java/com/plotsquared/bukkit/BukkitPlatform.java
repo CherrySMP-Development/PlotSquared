@@ -285,7 +285,7 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
         final PlotSquared plotSquared = new PlotSquared(this, "Bukkit");
 
         // FastAsyncWorldEdit
-        if (Settings.FAWE_Components.FAWE_HOOK) {
+        if (Settings.FAWE_Components.FAWE_HOOK && !FoliaCompat.isFolia()) {
             Plugin fawe = getServer().getPluginManager().getPlugin("FastAsyncWorldEdit");
             if (fawe != null) {
                 try {
@@ -296,6 +296,9 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
                             ".net/job/FastAsyncWorldEdit/");
                 }
             }
+        } else if (Settings.FAWE_Components.FAWE_HOOK && FoliaCompat.isFolia()
+                && getServer().getPluginManager().getPlugin("FastAsyncWorldEdit") != null) {
+            LOGGER.warn("Disabling the FastAsyncWorldEdit hook on Folia because FAWE queue operations are not region-thread safe here");
         }
 
         // We create the injector after PlotSquared has been initialized, so that we have access

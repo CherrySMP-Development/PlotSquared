@@ -21,6 +21,7 @@ package com.plotsquared.bukkit.queue;
 import com.google.inject.Inject;
 import com.plotsquared.bukkit.schematic.StateWrapper;
 import com.plotsquared.bukkit.util.BukkitBlockUtil;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.core.configuration.Settings;
 import com.plotsquared.core.inject.factory.ChunkCoordinatorBuilderFactory;
 import com.plotsquared.core.inject.factory.ChunkCoordinatorFactory;
@@ -206,6 +207,10 @@ public class BukkitQueueCoordinator extends BasicQueueCoordinator {
                 }
                 if (localChunk.getTiles().size() > 0) {
                     localChunk.getTiles().forEach((blockVector3, tag) -> {
+                        if (FoliaCompat.isFolia()) {
+                            new StateWrapper(tag).restoreTag(getBukkitWorld().getBlockAt(blockVector3.getX(), blockVector3.getY(), blockVector3.getZ()));
+                            return;
+                        }
                         try {
                             BaseBlock block = getWorld().getBlock(blockVector3).toBaseBlock(tag);
                             getWorld().setBlock(blockVector3, block, getSideEffectSet(SideEffectState.NONE));
@@ -248,6 +253,10 @@ public class BukkitQueueCoordinator extends BasicQueueCoordinator {
      */
     @SuppressWarnings("unused")
     private void setWorldBlock(int x, int y, int z, @NonNull BaseBlock block, @NonNull BlockVector2 blockVector2, boolean edge) {
+        if (FoliaCompat.isFolia()) {
+            setWorldBlockDirect(x, y, z, block);
+            return;
+        }
         try {
             BlockVector3 loc = BlockVector3.at(x, y, z);
             boolean lighting = false;
@@ -299,6 +308,28 @@ public class BukkitQueueCoordinator extends BasicQueueCoordinator {
 
                 sw.restoreTag(existing);
             }
+        }
+    }
+
+    private void setWorldBlockDirect(int x, int y, int z, @NonNull BaseBlock block) {
+        BlockData blockData = BukkitAdapter.adapt(block);
+        Block existing;
+        if (getChunkObject() instanceof Chunk chunkObject) {
+            existing = chunkObject.getBlock(x & 15, y, z & 15);
+        } else {
+            existing = getBukkitWorld().getBlockAt(x, y, z);
+        }
+        final BlockState existingBaseBlock = BukkitAdapter.adapt(existing.getBlockData());
+        if (BukkitBlockUtil.get(existing).equals(existingBaseBlock) && existing.getBlockData().matches(blockData)) {
+            return;
+        }
+        if (existing.getState() instanceof Container) {
+            ((Container) existing.getState()).getInventory().clear();
+        }
+        existing.setType(BukkitAdapter.adapt(block.getBlockType()), false);
+        existing.setBlockData(blockData, false);
+        if (block.hasNbtData()) {
+            new StateWrapper(block.getNbtData()).restoreTag(existing);
         }
     }
 
