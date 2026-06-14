@@ -176,6 +176,7 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
 
     private static final Logger LOGGER = LogManager.getLogger("PlotSquared/" + BukkitPlatform.class.getSimpleName());
     private static final int BSTATS_ID = 1404;
+    private static final int FOLIA_ROAD_ENTITY_CHUNK_BUDGET = 32;
 
     static {
         try {
@@ -192,6 +193,7 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
     private boolean metricsStarted;
     private boolean faweHook = false;
     private PlotSquaredTask cleanupTask;
+    private final Map<String, Integer> foliaRoadEntityChunkCursor = new HashMap<>();
 
     private Injector injector;
 
@@ -801,7 +803,14 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
                     return;
                 }
                 if (FoliaCompat.isFolia()) {
-                    for (final Chunk chunk : world.getLoadedChunks()) {
+                    final Chunk[] loadedChunks = world.getLoadedChunks();
+                    if (loadedChunks.length == 0) {
+                        return;
+                    }
+                    final int startIndex = this.foliaRoadEntityChunkCursor.getOrDefault(world.getName(), 0);
+                    final int processedChunks = Math.min(FOLIA_ROAD_ENTITY_CHUNK_BUDGET, loadedChunks.length);
+                    for (int offset = 0; offset < processedChunks; offset++) {
+                        final Chunk chunk = loadedChunks[(startIndex + offset) % loadedChunks.length];
                         final Location chunkLocation = new Location(world, chunk.getX() << 4, world.getMinHeight(), chunk.getZ() << 4);
                         FoliaCompat.runAtLocation(this, chunkLocation, () -> {
                             for (final Entity entity : chunk.getEntities()) {
@@ -809,6 +818,7 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
                             }
                         });
                     }
+                    this.foliaRoadEntityChunkCursor.put(world.getName(), (startIndex + processedChunks) % loadedChunks.length);
                     return;
                 }
                 List<Entity> entities = world.getEntities();

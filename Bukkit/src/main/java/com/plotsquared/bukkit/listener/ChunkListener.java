@@ -54,6 +54,7 @@ import org.bukkit.event.world.ChunkUnloadEvent;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.plotsquared.core.util.ReflectionUtils.getRefClass;
 
@@ -61,6 +62,9 @@ import static com.plotsquared.core.util.ReflectionUtils.getRefClass;
 public class ChunkListener implements Listener {
 
     private static final Logger LOGGER = LogManager.getLogger("PlotSquared/" + ChunkListener.class.getSimpleName());
+    private static final long CLEAN_CHUNK_BUDGET_MILLIS_FOLIA = 3L;
+    private static final long CLEAN_CHUNK_BUDGET_MILLIS_DEFAULT = 10L;
+    private static final int CLEAN_CHUNK_MAX_TILE_REMOVALS_PER_RUN = 64;
 
     private final PlotAreaManager plotAreaManager;
 
@@ -237,6 +241,7 @@ public class ChunkListener implements Listener {
 
     private void cleanChunk(final Chunk chunk) {
         final int currentIndex = TaskManager.index.incrementAndGet();
+        final AtomicInteger tileIndex = new AtomicInteger();
         PlotSquaredTask task = TaskManager.runTaskRepeat(() -> {
             if (!chunk.isLoaded()) {
                 Objects.requireNonNull(TaskManager.removeTask(currentIndex)).cancel();
@@ -250,15 +255,19 @@ public class ChunkListener implements Listener {
                 return;
             }
             long start = System.currentTimeMillis();
-            int i = 0;
-            while (System.currentTimeMillis() - start < 250) {
+            final long budget = com.plotsquared.bukkit.util.FoliaCompat.isFolia()
+                    ? CLEAN_CHUNK_BUDGET_MILLIS_FOLIA
+                    : CLEAN_CHUNK_BUDGET_MILLIS_DEFAULT;
+            int removedThisRun = 0;
+            while (System.currentTimeMillis() - start < budget && removedThisRun < CLEAN_CHUNK_MAX_TILE_REMOVALS_PER_RUN) {
+                int i = tileIndex.getAndIncrement();
                 if (i >= tiles.length - Settings.Chunk_Processor.MAX_TILES) {
                     Objects.requireNonNull(TaskManager.removeTask(currentIndex)).cancel();
                     chunk.unload(true);
                     return;
                 }
                 tiles[i].getBlock().setType(Material.AIR, false);
-                i++;
+                removedThisRun++;
             }
         }, TaskTime.ticks(5L));
         TaskManager.addTask(task, currentIndex);

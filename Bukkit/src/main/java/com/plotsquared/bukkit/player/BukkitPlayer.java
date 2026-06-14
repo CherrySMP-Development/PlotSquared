@@ -58,6 +58,7 @@ import org.checkerframework.checker.index.qual.NonNegative;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.concurrent.ExecutionException;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -71,6 +72,11 @@ import static com.sk89q.worldedit.world.gamemode.GameModes.SURVIVAL;
 public class BukkitPlayer extends PlotPlayer<Player> {
 
     private static boolean CHECK_EFFECTIVE = true;
+    private static final String ADMIN_PERMISSION = Permission.PERMISSION_ADMIN.toString();
+    private static final String PERMISSION_WILDCARD = Permission.PERMISSION_STAR.toString();
+    private static final Sound[] MUSIC_DISC_SOUNDS = Arrays.stream(Sound.values())
+            .filter(sound -> sound.name().startsWith("MUSIC_DISC"))
+            .toArray(Sound[]::new);
     public final Player player;
     private String name;
 
@@ -146,9 +152,10 @@ public class BukkitPlayer extends PlotPlayer<Player> {
     }
 
     private void callEvent(final @NonNull Event event) {
+        final String platformPluginName = PlotSquared.platform().pluginName();
         final RegisteredListener[] listeners = event.getHandlers().getRegisteredListeners();
         for (final RegisteredListener listener : listeners) {
-            if (listener.getPlugin().getName().equals(PlotSquared.platform().pluginName())) {
+            if (listener.getPlugin().getName().equals(platformPluginName)) {
                 continue;
             }
             try {
@@ -166,42 +173,44 @@ public class BukkitPlayer extends PlotPlayer<Player> {
             final @NonNull String stub,
             @NonNegative final int range
     ) {
-        if (hasPermission(Permission.PERMISSION_ADMIN.toString())) {
+        if (hasPermission(ADMIN_PERMISSION)) {
             return Integer.MAX_VALUE;
         }
-        final String[] nodes = stub.split("\\.");
-        final StringBuilder n = new StringBuilder();
-        // Wildcard check from less specific permission to more specific permission
-        for (int i = 0; i < (nodes.length - 1); i++) {
-            n.append(nodes[i]).append(".");
-            if (!stub.equals(n + Permission.PERMISSION_STAR.toString())) {
-                if (hasPermission(n + Permission.PERMISSION_STAR.toString())) {
-                    return Integer.MAX_VALUE;
-                }
+        final String wildcardPermission = stub + "." + PERMISSION_WILDCARD;
+        final StringBuilder prefixBuilder = new StringBuilder(stub.length() + PERMISSION_WILDCARD.length() + 1);
+        // Wildcard check from less specific permission to more specific permission without regex splitting.
+        int searchStart = 0;
+        int dotIndex;
+        while ((dotIndex = stub.indexOf('.', searchStart)) != -1) {
+            prefixBuilder.append(stub, searchStart, dotIndex + 1);
+            final String candidate = prefixBuilder + PERMISSION_WILDCARD;
+            if (!wildcardPermission.equals(candidate) && hasPermission(candidate)) {
+                return Integer.MAX_VALUE;
             }
+            searchStart = dotIndex + 1;
         }
         // Wildcard check for the full permission
-        if (hasPermission(stub + ".*")) {
+        if (hasPermission(wildcardPermission)) {
             return Integer.MAX_VALUE;
         }
         // Permission value cache for iterative check
         int max = 0;
         if (CHECK_EFFECTIVE) {
             boolean hasAny = false;
-            String stubPlus = stub + ".";
+            final String stubPlus = stub + ".";
             final Set<PermissionAttachmentInfo> effective = player.getEffectivePermissions();
             if (!effective.isEmpty()) {
-                for (PermissionAttachmentInfo attach : effective) {
+                for (final PermissionAttachmentInfo attach : effective) {
                     // Ignore all "false" permissions
                     if (!attach.getValue()) {
                         continue;
                     }
-                    String permStr = attach.getPermission();
+                    final String permStr = attach.getPermission();
                     if (permStr.startsWith(stubPlus)) {
                         hasAny = true;
-                        String end = permStr.substring(stubPlus.length());
+                        final String end = permStr.substring(stubPlus.length());
                         if (MathMan.isInteger(end)) {
-                            int val = Integer.parseInt(end);
+                            final int val = Integer.parseInt(end);
                             if (val > range) {
                                 return val;
                             }
@@ -215,8 +224,8 @@ public class BukkitPlayer extends PlotPlayer<Player> {
                     return max;
                 }
                 // Workaround
-                for (PermissionAttachmentInfo attach : effective) {
-                    String permStr = attach.getPermission();
+                for (final PermissionAttachmentInfo attach : effective) {
+                    final String permStr = attach.getPermission();
                     if (permStr.startsWith("plots.") && !permStr.equals("plots.use")) {
                         return max;
                     }
@@ -224,8 +233,9 @@ public class BukkitPlayer extends PlotPlayer<Player> {
                 CHECK_EFFECTIVE = false;
             }
         }
+        final String numericPrefix = stub + ".";
         for (int i = range; i > 0; i--) {
-            if (hasPermission(stub + "." + i)) {
+            if (hasPermission(numericPrefix + i)) {
                 return i;
             }
         }
@@ -351,10 +361,8 @@ public class BukkitPlayer extends PlotPlayer<Player> {
                     return;
                 }
                 // 1.18 and downwards require a specific Sound to stop (even tho the packet does not??)
-                for (final Sound sound : Sound.values()) {
-                    if (sound.name().startsWith("MUSIC_DISC")) {
-                        player.stopSound(sound, SoundCategory.MUSIC);
-                    }
+                for (final Sound sound : MUSIC_DISC_SOUNDS) {
+                    player.stopSound(sound, SoundCategory.MUSIC);
                 }
                 return;
             }
