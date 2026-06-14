@@ -27,10 +27,8 @@ import com.plotsquared.core.PlotVersion;
 import com.plotsquared.core.configuration.Settings;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bukkit.Bukkit;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 import javax.net.ssl.HttpsURLConnection;
 import java.io.IOException;
@@ -44,7 +42,7 @@ public class UpdateUtility implements Listener {
     public static PlotVersion internalVersion;
     public static String spigotVersion;
     public static boolean hasUpdate;
-    private static BukkitTask task;
+    private static Object task;
     public final JavaPlugin javaPlugin;
     private boolean notify = true;
 
@@ -57,7 +55,7 @@ public class UpdateUtility implements Listener {
     @SuppressWarnings({"deprecation", "DefaultCharset"})
     // Suppress Json deprecation, we can't use features from gson 2.8.1 and newer yet
     public void updateChecker() {
-        task = Bukkit.getScheduler().runTaskTimerAsynchronously(this.javaPlugin, () -> {
+        task = FoliaCompat.runAsyncRepeating(this.javaPlugin, () -> {
             try {
                 HttpsURLConnection connection = (HttpsURLConnection) URI.create(
                         "https://api.spigotmc.org/simple/0.2/index.php?action=getResource&id=77506")
@@ -91,7 +89,11 @@ public class UpdateUtility implements Listener {
     }
 
     private void cancelTask() {
-        Bukkit.getScheduler().runTaskLater(javaPlugin, () -> task.cancel(), 20L);
+        FoliaCompat.runGlobalLater(
+                this.javaPlugin,
+                () -> FoliaCompat.cancelTask(task),
+                20L
+        );
     }
 
 }

@@ -193,18 +193,22 @@ public class BukkitUtil extends WorldUtil {
             final @NonNull Consumer<Chunk> chunkConsumer
     ) {
         PaperLib.getChunkAtAsync(Objects.requireNonNull(getWorld(world)), x >> 4, z >> 4, true)
-                .thenAccept(chunk -> ensureMainThread(chunkConsumer, chunk));
+                .thenAccept(chunk -> runChunkConsumer(chunkConsumer, chunk));
     }
 
     private static void ensureLoaded(final @NonNull Location location, final @NonNull Consumer<Chunk> chunkConsumer) {
-        PaperLib.getChunkAtAsync(adapt(location), true).thenAccept(chunk -> ensureMainThread(chunkConsumer, chunk));
+        PaperLib.getChunkAtAsync(adapt(location), true).thenAccept(chunk -> runChunkConsumer(chunkConsumer, chunk));
     }
 
-    private static <T> void ensureMainThread(final @NonNull Consumer<T> consumer, final @NonNull T value) {
-        if (Bukkit.isPrimaryThread()) {
-            consumer.accept(value);
+    private static void runChunkConsumer(final @NonNull Consumer<Chunk> consumer, final @NonNull Chunk chunk) {
+        final BukkitPlatform plugin = BukkitPlatform.getPlugin(BukkitPlatform.class);
+        final org.bukkit.Location chunkLocation = new org.bukkit.Location(chunk.getWorld(), chunk.getX() << 4, 0, chunk.getZ() << 4);
+        if (FoliaCompat.isFolia()) {
+            FoliaCompat.runAtLocation(plugin, chunkLocation, () -> consumer.accept(chunk));
+        } else if (Bukkit.isPrimaryThread()) {
+            consumer.accept(chunk);
         } else {
-            Bukkit.getScheduler().runTask(BukkitPlatform.getPlugin(BukkitPlatform.class), () -> consumer.accept(value));
+            Bukkit.getScheduler().runTask(plugin, () -> consumer.accept(chunk));
         }
     }
 
@@ -570,17 +574,14 @@ public class BukkitUtil extends WorldUtil {
                 chunks.add(loc);
             }
         } else {
-            final Semaphore semaphore = new Semaphore(1);
             try {
-                semaphore.acquire();
-                Bukkit.getScheduler().runTask(BukkitPlatform.getPlugin(BukkitPlatform.class), () -> {
+                TaskManager.getPlatformImplementation().sync(() -> {
                     for (Chunk chunk : Objects.requireNonNull(Bukkit.getWorld(world)).getLoadedChunks()) {
                         BlockVector2 loc = BlockVector2.at(chunk.getX() >> 5, chunk.getZ() >> 5);
                         chunks.add(loc);
                     }
-                    semaphore.release();
+                    return null;
                 });
-                semaphore.acquireUninterruptibly();
             } catch (final Exception e) {
                 e.printStackTrace();
             }

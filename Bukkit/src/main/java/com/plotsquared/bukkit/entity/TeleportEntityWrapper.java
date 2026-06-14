@@ -19,6 +19,7 @@
 package com.plotsquared.bukkit.entity;
 
 import com.plotsquared.bukkit.BukkitPlatform;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -42,7 +43,7 @@ public class TeleportEntityWrapper extends EntityWrapper {
         if (!getEntity().getLocation().getChunk().equals(oldLocation.getChunk())) {
             final Location oldLocation = this.oldLocation.clone();
             oldLocation.add(xOffset, 0, xOffset);
-            getEntity().teleport(oldLocation);
+            FoliaCompat.teleportEntity(BukkitPlatform.getPlugin(BukkitPlatform.class), getEntity(), oldLocation);
             getEntity().setGravity(gravityOld);
             getEntity().setInvulnerable(invulnerableOld);
             getEntity().setFireTicks(fireTicksOld);
@@ -77,8 +78,11 @@ public class TeleportEntityWrapper extends EntityWrapper {
                 new FixedMetadataValue(BukkitPlatform.getPlugin(BukkitPlatform.class), oldLocation)
         );
         final Chunk newChunk = getNewChunk();
-        this.getEntity().teleport(
-                new Location(newChunk.getWorld(), newChunk.getX() << 4, 5000, newChunk.getZ() << 4));
+        FoliaCompat.teleportEntity(
+                BukkitPlatform.getPlugin(BukkitPlatform.class),
+                this.getEntity(),
+                new Location(newChunk.getWorld(), newChunk.getX() << 4, 5000, newChunk.getZ() << 4)
+        );
     }
 
     private Chunk getNewChunk() {

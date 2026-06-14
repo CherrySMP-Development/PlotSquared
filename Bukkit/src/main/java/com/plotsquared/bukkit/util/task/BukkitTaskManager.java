@@ -21,6 +21,7 @@ package com.plotsquared.bukkit.util.task;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.plotsquared.bukkit.BukkitPlatform;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.core.PlotSquared;
 import com.plotsquared.core.util.task.PlotSquaredTask;
 import com.plotsquared.core.util.task.TaskManager;
@@ -57,6 +58,12 @@ public class BukkitTaskManager extends TaskManager {
             final @NonNull TaskTime taskTime
     ) {
         final long ticks = this.timeConverter.toTicks(taskTime);
+        if (FoliaCompat.isFolia()) {
+            return new FoliaPlotSquaredTask(
+                    runnable,
+                    FoliaCompat.runGlobalRepeating(this.bukkitMain, runnable, ticks, ticks)
+            );
+        }
         final BukkitPlotSquaredTask bukkitPlotSquaredTask = new BukkitPlotSquaredTask(runnable);
         bukkitPlotSquaredTask.runTaskTimer(this.bukkitMain, ticks, ticks);
         return bukkitPlotSquaredTask;
@@ -68,6 +75,12 @@ public class BukkitTaskManager extends TaskManager {
             final @NonNull TaskTime taskTime
     ) {
         final long ticks = this.timeConverter.toTicks(taskTime);
+        if (FoliaCompat.isFolia()) {
+            return new FoliaPlotSquaredTask(
+                    runnable,
+                    FoliaCompat.runAsyncRepeating(this.bukkitMain, runnable, ticks, ticks)
+            );
+        }
         final BukkitPlotSquaredTask bukkitPlotSquaredTask = new BukkitPlotSquaredTask(runnable);
         bukkitPlotSquaredTask.runTaskTimerAsynchronously(this.bukkitMain, ticks, ticks);
         return bukkitPlotSquaredTask;
@@ -76,7 +89,11 @@ public class BukkitTaskManager extends TaskManager {
     @Override
     public void taskAsync(final @NonNull Runnable runnable) {
         if (this.bukkitMain.isEnabled()) {
-            new BukkitPlotSquaredTask(runnable).runTaskAsynchronously(this.bukkitMain);
+            if (FoliaCompat.isFolia()) {
+                FoliaCompat.runAsync(this.bukkitMain, runnable);
+            } else {
+                new BukkitPlotSquaredTask(runnable).runTaskAsynchronously(this.bukkitMain);
+            }
         } else {
             runnable.run();
         }
@@ -84,7 +101,7 @@ public class BukkitTaskManager extends TaskManager {
 
     @Override
     public <T> T sync(final @NonNull Callable<T> function, final int timeout) throws Exception {
-        if (PlotSquared.get().isMainThread(Thread.currentThread())) {
+        if (FoliaCompat.isFolia() ? FoliaCompat.isGlobalTickThread() : PlotSquared.get().isMainThread(Thread.currentThread())) {
             return function.call();
         }
         return this.callMethodSync(function).get(timeout, TimeUnit.MILLISECONDS);
@@ -92,12 +109,27 @@ public class BukkitTaskManager extends TaskManager {
 
     @Override
     public <T> Future<T> callMethodSync(final @NonNull Callable<T> method) {
+        if (FoliaCompat.isFolia()) {
+            final java.util.concurrent.CompletableFuture<T> future = new java.util.concurrent.CompletableFuture<>();
+            FoliaCompat.runGlobal(this.bukkitMain, () -> {
+                try {
+                    future.complete(method.call());
+                } catch (final Throwable throwable) {
+                    future.completeExceptionally(throwable);
+                }
+            });
+            return future;
+        }
         return Bukkit.getScheduler().callSyncMethod(this.bukkitMain, method);
     }
 
     @Override
     public void task(final @NonNull Runnable runnable) {
-        new BukkitPlotSquaredTask(runnable).runTask(this.bukkitMain);
+        if (FoliaCompat.isFolia()) {
+            FoliaCompat.runGlobal(this.bukkitMain, runnable);
+        } else {
+            new BukkitPlotSquaredTask(runnable).runTask(this.bukkitMain);
+        }
     }
 
     @Override
@@ -106,7 +138,11 @@ public class BukkitTaskManager extends TaskManager {
             final @NonNull TaskTime taskTime
     ) {
         final long delay = this.timeConverter.toTicks(taskTime);
-        new BukkitPlotSquaredTask(runnable).runTaskLater(this.bukkitMain, delay);
+        if (FoliaCompat.isFolia()) {
+            FoliaCompat.runGlobalLater(this.bukkitMain, runnable, delay);
+        } else {
+            new BukkitPlotSquaredTask(runnable).runTaskLater(this.bukkitMain, delay);
+        }
     }
 
     @Override
@@ -115,7 +151,11 @@ public class BukkitTaskManager extends TaskManager {
             final @NonNull TaskTime taskTime
     ) {
         final long delay = this.timeConverter.toTicks(taskTime);
-        new BukkitPlotSquaredTask(runnable).runTaskLaterAsynchronously(this.bukkitMain, delay);
+        if (FoliaCompat.isFolia()) {
+            FoliaCompat.runAsyncLater(this.bukkitMain, runnable, delay);
+        } else {
+            new BukkitPlotSquaredTask(runnable).runTaskLaterAsynchronously(this.bukkitMain, delay);
+        }
     }
 
 }

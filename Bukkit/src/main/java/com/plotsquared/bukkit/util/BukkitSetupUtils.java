@@ -102,11 +102,16 @@ public class BukkitSetupUtils extends SetupUtils {
         TaskManager.runTask(() -> {
             World world = Bukkit.getWorld(worldName);
             if (world == null) {
-                return;
+                    return;
             }
             Location location = Bukkit.getWorlds().get(0).getSpawnLocation();
             for (Player player : world.getPlayers()) {
-                player.teleport(location);
+                FoliaCompat.teleportPlayer(
+                        BukkitPlatform.getPlugin(BukkitPlatform.class),
+                        player,
+                        location,
+                        org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.PLUGIN
+                );
             }
             if (save) {
                 for (Chunk chunk : world.getLoadedChunks()) {

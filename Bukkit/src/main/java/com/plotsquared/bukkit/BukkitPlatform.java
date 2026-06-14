@@ -48,6 +48,7 @@ import com.plotsquared.bukkit.placeholder.PlaceholderFormatter;
 import com.plotsquared.bukkit.player.BukkitPlayerManager;
 import com.plotsquared.bukkit.util.BukkitUtil;
 import com.plotsquared.bukkit.util.BukkitWorld;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.bukkit.util.SetGenCB;
 import com.plotsquared.bukkit.util.TranslationUpdateManager;
 import com.plotsquared.bukkit.util.UpdateUtility;
@@ -107,6 +108,7 @@ import com.plotsquared.core.util.PremiumVerification;
 import com.plotsquared.core.util.ReflectionUtils;
 import com.plotsquared.core.util.SetupUtils;
 import com.plotsquared.core.util.WorldUtil;
+import com.plotsquared.core.util.task.PlotSquaredTask;
 import com.plotsquared.core.util.task.TaskManager;
 import com.plotsquared.core.util.task.TaskTime;
 import com.plotsquared.core.uuid.CacheUUIDService;
@@ -189,6 +191,7 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
     private boolean methodUnloadSetup = false;
     private boolean metricsStarted;
     private boolean faweHook = false;
+    private PlotSquaredTask cleanupTask;
 
     private Injector injector;
 
@@ -579,7 +582,7 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
         }
 
         // Clean up potential memory leak
-        Bukkit.getScheduler().runTaskTimer(this, () -> {
+        this.cleanupTask = TaskManager.runTaskRepeat(() -> {
             try {
                 for (final PlotPlayer<? extends Player> player : this.playerManager().getPlayers()) {
                     if (player.getPlatformPlayer() == null || !player.getPlatformPlayer().isOnline()) {
@@ -589,7 +592,7 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
             } catch (final Exception e) {
                 getLogger().warning("Failed to clean up players: " + e.getMessage());
             }
-        }, 100L, 100L);
+        }, TaskTime.ticks(100L));
 
         // Check if we are in a safe environment
         ServerLib.checkUnsafeForks();
@@ -747,6 +750,10 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
     @Override
     public void onDisable() {
         PlotSquared.get().disable();
+        if (this.cleanupTask != null) {
+            this.cleanupTask.cancel();
+            this.cleanupTask = null;
+        }
         Bukkit.getScheduler().cancelTasks(this);
     }
 

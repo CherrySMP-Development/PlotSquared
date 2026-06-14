@@ -18,8 +18,10 @@
  */
 package com.plotsquared.bukkit.listener;
 
+import com.plotsquared.bukkit.BukkitPlatform;
 import com.plotsquared.bukkit.util.BukkitEntityUtil;
 import com.plotsquared.bukkit.util.BukkitUtil;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.core.PlotSquared;
 import com.plotsquared.core.configuration.Settings;
 import com.plotsquared.core.location.Location;
@@ -99,7 +101,7 @@ public class EntitySpawnListener implements Listener {
                         }
                         try {
                             ignoreTP = true;
-                            PaperLib.teleportAsync(entity, origin);
+                            FoliaCompat.teleportEntity(BukkitPlatform.getPlugin(BukkitPlatform.class), entity, origin);
                         } finally {
                             ignoreTP = false;
                         }

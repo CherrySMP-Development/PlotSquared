@@ -21,9 +21,11 @@ package com.plotsquared.bukkit.listener;
 import com.destroystokyo.paper.MaterialTags;
 import com.google.common.base.Charsets;
 import com.google.inject.Inject;
+import com.plotsquared.bukkit.BukkitPlatform;
 import com.plotsquared.bukkit.player.BukkitPlayer;
 import com.plotsquared.bukkit.util.BukkitEntityUtil;
 import com.plotsquared.bukkit.util.BukkitUtil;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.bukkit.util.UpdateUtility;
 import com.plotsquared.core.PlotSquared;
 import com.plotsquared.core.configuration.Settings;
@@ -692,7 +694,7 @@ public class PlayerEventListener implements Listener {
                     if (dest != null) {
                         vehicle.eject();
                         vehicle.setVelocity(new Vector(0d, 0d, 0d));
-                        PaperLib.teleportAsync(vehicle, dest);
+                        FoliaCompat.teleportEntity(BukkitPlatform.getPlugin(BukkitPlatform.class), vehicle, dest);
                         passengers.forEach(vehicle::addPassenger);
                         return;
                     }
@@ -765,9 +767,19 @@ public class PlayerEventListener implements Listener {
                         );
                         this.tmpTeleport = false;
                         if (lastPlot.equals(BukkitUtil.adapt(from).getPlot())) {
-                            player.teleport(from);
+                            FoliaCompat.teleportPlayer(
+                                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                                    player,
+                                    from,
+                                    PlayerTeleportEvent.TeleportCause.PLUGIN
+                            );
                         } else {
-                            player.teleport(player.getWorld().getSpawnLocation());
+                            FoliaCompat.teleportPlayer(
+                                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                                    player,
+                                    player.getWorld().getSpawnLocation(),
+                                    PlayerTeleportEvent.TeleportCause.PLUGIN
+                            );
                         }
                         this.tmpTeleport = true;
                         event.setCancelled(true);
@@ -785,7 +797,12 @@ public class PlayerEventListener implements Listener {
                 to.setX(from.getBlockX());
                 to.setY(from.getBlockY());
                 to.setZ(from.getBlockZ());
-                player.teleport(event.getTo());
+                FoliaCompat.teleportPlayer(
+                        BukkitPlatform.getPlugin(BukkitPlatform.class),
+                        player,
+                        event.getTo(),
+                        PlayerTeleportEvent.TeleportCause.PLUGIN
+                );
                 this.tmpTeleport = true;
                 return;
             }
@@ -795,7 +812,12 @@ public class PlayerEventListener implements Listener {
                 if (!pp.hasPermission(Permission.PERMISSION_ADMIN_BYPASS_BORDER)) {
                     to.setX(border - 1);
                     this.tmpTeleport = false;
-                    player.teleport(event.getTo());
+                    FoliaCompat.teleportPlayer(
+                            BukkitPlatform.getPlugin(BukkitPlatform.class),
+                            player,
+                            event.getTo(),
+                            PlayerTeleportEvent.TeleportCause.PLUGIN
+                    );
                     this.tmpTeleport = true;
                     pp.sendMessage(TranslatableCaption.of("border.denied"));
                 } else if (MathMan.roundInt(from.getX()) <= border) { // Only send if they just moved out of the border
@@ -805,7 +827,12 @@ public class PlayerEventListener implements Listener {
                 if (!pp.hasPermission(Permission.PERMISSION_ADMIN_BYPASS_BORDER)) {
                     to.setX(-border + 1);
                     this.tmpTeleport = false;
-                    player.teleport(event.getTo());
+                    FoliaCompat.teleportPlayer(
+                            BukkitPlatform.getPlugin(BukkitPlatform.class),
+                            player,
+                            event.getTo(),
+                            PlayerTeleportEvent.TeleportCause.PLUGIN
+                    );
                     this.tmpTeleport = true;
                     pp.sendMessage(TranslatableCaption.of("border.denied"));
                 } else if (MathMan.roundInt(from.getX()) >= -border) { // Only send if they just moved out of the border
@@ -859,9 +886,19 @@ public class PlayerEventListener implements Listener {
                         );
                         this.tmpTeleport = false;
                         if (lastPlot.equals(BukkitUtil.adapt(from).getPlot())) {
-                            player.teleport(from);
+                            FoliaCompat.teleportPlayer(
+                                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                                    player,
+                                    from,
+                                    PlayerTeleportEvent.TeleportCause.PLUGIN
+                            );
                         } else {
-                            player.teleport(player.getWorld().getSpawnLocation());
+                            FoliaCompat.teleportPlayer(
+                                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                                    player,
+                                    player.getWorld().getSpawnLocation(),
+                                    PlayerTeleportEvent.TeleportCause.PLUGIN
+                            );
                         }
                         this.tmpTeleport = true;
                         event.setCancelled(true);
@@ -876,11 +913,21 @@ public class PlayerEventListener implements Listener {
                         TagResolver.resolver("plot", Tag.inserting(Component.text(plot.toString())))
                 );
                 this.tmpTeleport = false;
-                player.teleport(from);
+                FoliaCompat.teleportPlayer(
+                        BukkitPlatform.getPlugin(BukkitPlatform.class),
+                        player,
+                        from,
+                        PlayerTeleportEvent.TeleportCause.PLUGIN
+                );
                 to.setX(from.getBlockX());
                 to.setY(from.getBlockY());
                 to.setZ(from.getBlockZ());
-                player.teleport(event.getTo());
+                FoliaCompat.teleportPlayer(
+                        BukkitPlatform.getPlugin(BukkitPlatform.class),
+                        player,
+                        event.getTo(),
+                        PlayerTeleportEvent.TeleportCause.PLUGIN
+                );
                 this.tmpTeleport = true;
                 return;
             }
@@ -890,7 +937,12 @@ public class PlayerEventListener implements Listener {
                 if (!pp.hasPermission(Permission.PERMISSION_ADMIN_BYPASS_BORDER)) {
                     to.setZ(border - 1);
                     this.tmpTeleport = false;
-                    player.teleport(event.getTo());
+                    FoliaCompat.teleportPlayer(
+                            BukkitPlatform.getPlugin(BukkitPlatform.class),
+                            player,
+                            event.getTo(),
+                            PlayerTeleportEvent.TeleportCause.PLUGIN
+                    );
                     this.tmpTeleport = true;
                     pp.sendMessage(TranslatableCaption.of("border.denied"));
                 } else if (MathMan.roundInt(from.getZ()) <= border) { // Only send if they just moved out of the border
@@ -900,7 +952,12 @@ public class PlayerEventListener implements Listener {
                 if (!pp.hasPermission(Permission.PERMISSION_ADMIN_BYPASS_BORDER)) {
                     to.setZ(-border + 1);
                     this.tmpTeleport = false;
-                    player.teleport(event.getTo());
+                    FoliaCompat.teleportPlayer(
+                            BukkitPlatform.getPlugin(BukkitPlatform.class),
+                            player,
+                            event.getTo(),
+                            PlayerTeleportEvent.TeleportCause.PLUGIN
+                    );
                     this.tmpTeleport = true;
                     pp.sendMessage(TranslatableCaption.of("border.denied"));
                 } else if (MathMan.roundInt(from.getZ()) >= -border) { // Only send if they just moved out of the border
