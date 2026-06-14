@@ -48,6 +48,7 @@ import com.plotsquared.bukkit.placeholder.PlaceholderFormatter;
 import com.plotsquared.bukkit.player.BukkitPlayerManager;
 import com.plotsquared.bukkit.util.BukkitUtil;
 import com.plotsquared.bukkit.util.BukkitWorld;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.bukkit.util.SetGenCB;
 import com.plotsquared.bukkit.util.TranslationUpdateManager;
 import com.plotsquared.bukkit.util.UpdateUtility;
@@ -753,7 +754,9 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
             this.cleanupTask.cancel();
             this.cleanupTask = null;
         }
-        Bukkit.getScheduler().cancelTasks(this);
+        if (!FoliaCompat.isFolia()) {
+            Bukkit.getScheduler().cancelTasks(this);
+        }
     }
 
     @Override

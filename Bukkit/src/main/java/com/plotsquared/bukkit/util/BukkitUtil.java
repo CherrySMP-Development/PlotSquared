@@ -95,10 +95,12 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Collection;
+import java.util.concurrent.ExecutionException;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.stream.Stream;
 
@@ -418,23 +420,27 @@ public class BukkitUtil extends WorldUtil {
     @Override
     @NonNegative
     public double getHealth(final @NonNull PlotPlayer<?> player) {
-        return Objects.requireNonNull(Bukkit.getPlayer(player.getUUID())).getHealth();
+        final Player bukkitPlayer = Objects.requireNonNull(Bukkit.getPlayer(player.getUUID()));
+        return this.callPlayer(bukkitPlayer, Player::getHealth);
     }
 
     @Override
     @NonNegative
     public int getFoodLevel(final @NonNull PlotPlayer<?> player) {
-        return Objects.requireNonNull(Bukkit.getPlayer(player.getUUID())).getFoodLevel();
+        final Player bukkitPlayer = Objects.requireNonNull(Bukkit.getPlayer(player.getUUID()));
+        return this.callPlayer(bukkitPlayer, Player::getFoodLevel);
     }
 
     @Override
     public void setHealth(final @NonNull PlotPlayer<?> player, @NonNegative final double health) {
-        Objects.requireNonNull(Bukkit.getPlayer(player.getUUID())).setHealth(health);
+        final Player bukkitPlayer = Objects.requireNonNull(Bukkit.getPlayer(player.getUUID()));
+        this.runForPlayer(bukkitPlayer, () -> bukkitPlayer.setHealth(health));
     }
 
     @Override
     public void setFoodLevel(final @NonNull PlotPlayer<?> player, @NonNegative final int foodLevel) {
-        Bukkit.getPlayer(player.getUUID()).setFoodLevel(foodLevel);
+        final Player bukkitPlayer = Objects.requireNonNull(Bukkit.getPlayer(player.getUUID()));
+        this.runForPlayer(bukkitPlayer, () -> bukkitPlayer.setFoodLevel(foodLevel));
     }
 
     @Override
@@ -586,6 +592,28 @@ public class BukkitUtil extends WorldUtil {
             }
         }
         return chunks;
+    }
+
+    private <T> T callPlayer(final @NonNull Player player, final Function<Player, T> task) {
+        if (!FoliaCompat.isFolia()) {
+            return task.apply(player);
+        }
+        try {
+            return FoliaCompat.callAtEntity(BukkitPlatform.getPlugin(BukkitPlatform.class), player, entity -> task.apply((Player) entity));
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (final ExecutionException e) {
+            throw new RuntimeException(e.getCause() == null ? e : e.getCause());
+        }
+    }
+
+    private void runForPlayer(final @NonNull Player player, final @NonNull Runnable task) {
+        if (FoliaCompat.isFolia()) {
+            FoliaCompat.runAtEntity(BukkitPlatform.getPlugin(BukkitPlatform.class), player, task);
+            return;
+        }
+        task.run();
     }
 
 }

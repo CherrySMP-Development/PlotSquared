@@ -31,7 +31,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.lang.reflect.Method;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Consumer;
 
 /**
@@ -218,6 +221,42 @@ public final class FoliaCompat {
         } catch (final Throwable ignored) {
             PaperLib.teleportAsync(entity, location);
         }
+    }
+
+    public static void runAtEntity(
+            final @NonNull Plugin plugin,
+            final @NonNull Entity entity,
+            final @NonNull Runnable task
+    ) {
+        if (!isFolia()) {
+            Bukkit.getScheduler().runTask((JavaPlugin) plugin, task);
+            return;
+        }
+        try {
+            final Object scheduler = entity_getScheduler.invoke(entity);
+            entityScheduler_run.invoke(scheduler, plugin, consumer(task), null);
+        } catch (final Throwable ignored) {
+            Bukkit.getScheduler().runTask((JavaPlugin) plugin, task);
+        }
+    }
+
+    public static <T> @NonNull T callAtEntity(
+            final @NonNull Plugin plugin,
+            final @NonNull Entity entity,
+            final @NonNull Function<Entity, T> task
+    ) throws ExecutionException, InterruptedException {
+        if (!isFolia()) {
+            return task.apply(entity);
+        }
+        final CompletableFuture<T> future = new CompletableFuture<>();
+        runAtEntity(plugin, entity, () -> {
+            try {
+                future.complete(task.apply(entity));
+            } catch (final Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        });
+        return future.get();
     }
 
     public static void teleportPlayer(

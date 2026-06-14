@@ -18,6 +18,7 @@
  */
 package com.plotsquared.bukkit.util.task;
 
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.core.util.task.TaskTime;
 import org.bukkit.Bukkit;
 import org.checkerframework.checker.index.qual.NonNegative;
@@ -32,12 +33,23 @@ public final class PaperTimeConverter implements TaskTime.TimeConverter {
 
     @Override
     public long msToTicks(@NonNegative final long ms) {
-        return Math.max(1L, (long) (ms / Math.max(MIN_MS_PER_TICKS, Bukkit.getAverageTickTime())));
+        return Math.max(1L, (long) (ms / this.msPerTick()));
     }
 
     @Override
     public long ticksToMs(@NonNegative final long ticks) {
-        return Math.max(1L, (long) (ticks * Math.max(MIN_MS_PER_TICKS, Bukkit.getAverageTickTime())));
+        return Math.max(1L, (long) (ticks * this.msPerTick()));
+    }
+
+    private double msPerTick() {
+        if (FoliaCompat.isFolia()) {
+            return MIN_MS_PER_TICKS;
+        }
+        try {
+            return Math.max(MIN_MS_PER_TICKS, Bukkit.getAverageTickTime());
+        } catch (final UnsupportedOperationException ignored) {
+            return MIN_MS_PER_TICKS;
+        }
     }
 
 }
