@@ -58,6 +58,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.concurrent.ExecutionException;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static com.sk89q.worldedit.world.gamemode.GameModes.ADVENTURE;
 import static com.sk89q.worldedit.world.gamemode.GameModes.CREATIVE;
@@ -397,11 +399,11 @@ public class BukkitPlayer extends PlotPlayer<Player> {
         }
     }
 
-    private void runOnPlayer(final @NonNull java.util.function.Consumer<Player> task) {
+    private void runOnPlayer(final @NonNull Consumer<Player> task) {
         FoliaCompat.runAtEntity(BukkitPlatform.getPlugin(BukkitPlatform.class), this.player, () -> task.accept(this.player));
     }
 
-    private <T> T callOnPlayer(final @NonNull java.util.function.Function<Player, T> task) {
+    private <T> T callOnPlayer(final @NonNull Function<Player, T> task) {
         if (!FoliaCompat.isFolia()) {
             return task.apply(this.player);
         }
