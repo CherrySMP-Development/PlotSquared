@@ -649,7 +649,7 @@ public class BukkitUtil extends WorldUtil {
     @Override
     public Set<BlockVector2> getChunkChunks(String world) {
         Set<BlockVector2> chunks = super.getChunkChunks(world);
-        if (Bukkit.isPrimaryThread()) {
+        if (FoliaCompat.isFolia() ? FoliaCompat.isGlobalTickThread() : Bukkit.isPrimaryThread()) {
             for (Chunk chunk : Objects.requireNonNull(Bukkit.getWorld(world)).getLoadedChunks()) {
                 BlockVector2 loc = BlockVector2.at(chunk.getX() >> 5, chunk.getZ() >> 5);
                 chunks.add(loc);

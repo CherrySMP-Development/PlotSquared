@@ -140,7 +140,7 @@ public class Info extends SubCommand {
         } else {
             full = false;
         }
-        plot.format(info, player, full).thenAcceptAsync(player::sendMessage);
+        plot.format(info, player, full).thenAccept(caption -> com.plotsquared.core.util.task.TaskManager.runTask(() -> player.sendMessage(caption)));
         return true;
     }
 

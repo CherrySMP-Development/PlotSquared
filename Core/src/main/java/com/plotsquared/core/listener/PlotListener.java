@@ -185,9 +185,11 @@ public class PlotListener {
             String greeting = plot.getFlag(GreetingFlag.class);
             if (!greeting.isEmpty()) {
                 if (!Settings.Chat.NOTIFICATION_AS_ACTIONBAR) {
-                    plot.format(StaticCaption.of(greeting), player, false).thenAcceptAsync(player::sendMessage);
+                    plot.format(StaticCaption.of(greeting), player, false)
+                            .thenAccept(caption -> TaskManager.runTask(() -> player.sendMessage(caption)));
                 } else {
-                    plot.format(StaticCaption.of(greeting), player, false).thenAcceptAsync(player::sendActionBar);
+                    plot.format(StaticCaption.of(greeting), player, false)
+                            .thenAccept(caption -> TaskManager.runTask(() -> player.sendActionBar(caption)));
                 }
             }
 
@@ -338,13 +340,13 @@ public class PlotListener {
                                             .build()
                                     );
 
-                            future.whenComplete((tagResolver, throwable) -> {
+                            future.whenComplete((tagResolver, throwable) -> TaskManager.runTask(() -> {
                                 if (Settings.Titles.TITLES_AS_ACTIONBAR) {
                                     player.sendActionBar(header, tagResolver);
                                 } else {
                                     player.sendTitle(header, subHeader, tagResolver);
                                 }
-                            });
+                            }));
                         }
                     }, TaskTime.seconds(1L));
                 }
@@ -421,9 +423,11 @@ public class PlotListener {
                 String farewell = plot.getFlag(FarewellFlag.class);
                 if (!farewell.isEmpty()) {
                     if (!Settings.Chat.NOTIFICATION_AS_ACTIONBAR) {
-                        plot.format(StaticCaption.of(farewell), player, false).thenAcceptAsync(player::sendMessage);
+                        plot.format(StaticCaption.of(farewell), player, false)
+                                .thenAccept(caption -> TaskManager.runTask(() -> player.sendMessage(caption)));
                     } else {
-                        plot.format(StaticCaption.of(farewell), player, false).thenAcceptAsync(player::sendActionBar);
+                        plot.format(StaticCaption.of(farewell), player, false)
+                                .thenAccept(caption -> TaskManager.runTask(() -> player.sendActionBar(caption)));
                     }
                 }
 

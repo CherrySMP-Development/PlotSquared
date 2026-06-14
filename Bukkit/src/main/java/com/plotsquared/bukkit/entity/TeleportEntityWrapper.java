@@ -77,12 +77,21 @@ public class TeleportEntityWrapper extends EntityWrapper {
                 "ps-tmp-teleport",
                 new FixedMetadataValue(BukkitPlatform.getPlugin(BukkitPlatform.class), oldLocation)
         );
-        final Chunk newChunk = getNewChunk();
+        final Location temporaryLocation = getTemporaryLocation();
         FoliaCompat.teleportEntity(
                 BukkitPlatform.getPlugin(BukkitPlatform.class),
                 this.getEntity(),
-                new Location(newChunk.getWorld(), newChunk.getX() << 4, 5000, newChunk.getZ() << 4)
+                temporaryLocation
         );
+    }
+
+    private Location getTemporaryLocation() {
+        if (FoliaCompat.isFolia()) {
+            final World world = this.oldLocation.getWorld();
+            return new Location(world, (this.oldLocation.getChunk().getX() + 1) << 4, 5000, this.oldLocation.getChunk().getZ() << 4);
+        }
+        final Chunk newChunk = getNewChunk();
+        return new Location(newChunk.getWorld(), newChunk.getX() << 4, 5000, newChunk.getZ() << 4);
     }
 
     private Chunk getNewChunk() {

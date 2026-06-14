@@ -50,6 +50,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -102,59 +103,39 @@ public class BukkitRegionManager extends RegionManager {
         int tx = top.getX() >> 4;
         int tz = top.getZ() >> 4;
 
-        int size = tx - bx << 4;
-
-        Set<Chunk> chunks = new HashSet<>();
+        int[] count = new int[6];
         for (int X = bx; X <= tx; X++) {
             for (int Z = bz; Z <= tz; Z++) {
-                if (world.isChunkLoaded(X, Z)) {
-                    chunks.add(world.getChunkAt(X, Z));
-                }
-            }
-        }
-
-        boolean doWhole = false;
-        List<Entity> entities = null;
-        if (size > 200 && chunks.size() > 200) {
-            entities = world.getEntities();
-            if (entities.size() < 16 + size / 8) {
-                doWhole = true;
-            }
-        }
-
-        int[] count = new int[6];
-        if (doWhole) {
-            for (Entity entity : entities) {
-                org.bukkit.Location location = entity.getLocation();
-                Objects.requireNonNull(location.getWorld()).getChunkAtAsync(location, true).thenAccept(chunk -> {
-                    if (chunks.contains(chunk)) {
-                        int X = chunk.getX();
-                        int Z = chunk.getZ();
-                        if (X > bx && X < tx && Z > bz && Z < tz) {
-                            count(count, entity);
-                        } else {
-                            Plot other = area.getPlot(BukkitUtil.adapt(location));
-                            if (plot.equals(other)) {
-                                count(count, entity);
+                final int chunkX = X;
+                final int chunkZ = Z;
+                final org.bukkit.Location chunkLocation = new org.bukkit.Location(world, chunkX << 4, world.getMinHeight(), chunkZ << 4);
+                try {
+                    FoliaCompat.callAtLocation(
+                            com.plotsquared.bukkit.BukkitPlatform.getPlugin(com.plotsquared.bukkit.BukkitPlatform.class),
+                            chunkLocation,
+                            ignored -> {
+                                if (!world.isChunkLoaded(chunkX, chunkZ)) {
+                                    return null;
+                                }
+                                Chunk chunk = world.getChunkAt(chunkX, chunkZ);
+                                for (Entity entity : chunk.getEntities()) {
+                                    if (chunkX == bx || chunkX == tx || chunkZ == bz || chunkZ == tz) {
+                                        Plot other = area.getPlot(BukkitUtil.adapt(entity.getLocation()));
+                                        if (plot.equals(other)) {
+                                            count(count, entity);
+                                        }
+                                    } else {
+                                        count(count, entity);
+                                    }
+                                }
+                                return null;
                             }
-                        }
-                    }
-                });
-            }
-        } else {
-            for (Chunk chunk : chunks) {
-                int X = chunk.getX();
-                int Z = chunk.getZ();
-                Entity[] entities1 = chunk.getEntities();
-                for (Entity entity : entities1) {
-                    if (X == bx || X == tx || Z == bz || Z == tz) {
-                        Plot other = area.getPlot(BukkitUtil.adapt(entity.getLocation()));
-                        if (plot.equals(other)) {
-                            count(count, entity);
-                        }
-                    } else {
-                        count(count, entity);
-                    }
+                    );
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                } catch (final ExecutionException e) {
+                    throw new RuntimeException(e.getCause() == null ? e : e.getCause());
                 }
             }
         }
@@ -296,27 +277,50 @@ public class BukkitRegionManager extends RegionManager {
     @Override
     public void clearAllEntities(@NonNull Location pos1, @NonNull Location pos2) {
         String world = pos1.getWorldName();
-
         final World bukkitWorld = BukkitUtil.getWorld(world);
-        final List<Entity> entities;
-        if (bukkitWorld != null) {
-            entities = new ArrayList<>(bukkitWorld.getEntities());
-        } else {
-            entities = new ArrayList<>();
+        if (bukkitWorld == null) {
+            return;
         }
 
         int bx = pos1.getX();
         int bz = pos1.getZ();
         int tx = pos2.getX();
         int tz = pos2.getZ();
-        for (Entity entity : entities) {
-            if (!(entity instanceof Player)) {
-                org.bukkit.Location location = entity.getLocation();
-                if (location.getX() >= bx && location.getX() <= tx && location.getZ() >= bz && location.getZ() <= tz) {
-                    if (entity.hasMetadata("ps-tmp-teleport")) {
-                        continue;
-                    }
-                    entity.remove();
+        for (int chunkX = bx >> 4; chunkX <= tx >> 4; chunkX++) {
+            for (int chunkZ = bz >> 4; chunkZ <= tz >> 4; chunkZ++) {
+                final int currentChunkX = chunkX;
+                final int currentChunkZ = chunkZ;
+                final org.bukkit.Location chunkLocation = new org.bukkit.Location(
+                        bukkitWorld,
+                        currentChunkX << 4,
+                        bukkitWorld.getMinHeight(),
+                        currentChunkZ << 4
+                );
+                try {
+                    FoliaCompat.callAtLocation(
+                            com.plotsquared.bukkit.BukkitPlatform.getPlugin(com.plotsquared.bukkit.BukkitPlatform.class),
+                            chunkLocation,
+                            ignored -> {
+                                if (!bukkitWorld.isChunkLoaded(currentChunkX, currentChunkZ)) {
+                                    return null;
+                                }
+                                for (Entity entity : bukkitWorld.getChunkAt(currentChunkX, currentChunkZ).getEntities()) {
+                                    if (entity instanceof Player || entity.hasMetadata("ps-tmp-teleport")) {
+                                        continue;
+                                    }
+                                    org.bukkit.Location location = entity.getLocation();
+                                    if (location.getX() >= bx && location.getX() <= tx && location.getZ() >= bz && location.getZ() <= tz) {
+                                        entity.remove();
+                                    }
+                                }
+                                return null;
+                            }
+                    );
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                } catch (final ExecutionException e) {
+                    throw new RuntimeException(e.getCause() == null ? e : e.getCause());
                 }
             }
         }

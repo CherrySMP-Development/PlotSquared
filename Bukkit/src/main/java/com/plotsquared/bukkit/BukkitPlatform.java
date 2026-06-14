@@ -797,263 +797,177 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
                 if (world == null) {
                     return;
                 }
+                if (FoliaCompat.isFolia()) {
+                    for (final Chunk chunk : world.getLoadedChunks()) {
+                        final Location chunkLocation = new Location(world, chunk.getX() << 4, world.getMinHeight(), chunk.getZ() << 4);
+                        FoliaCompat.runAtLocation(this, chunkLocation, () -> {
+                            for (final Entity entity : chunk.getEntities()) {
+                                this.handleRoadEntity(plotArea, entity, null);
+                            }
+                        });
+                    }
+                    return;
+                }
                 List<Entity> entities = world.getEntities();
                 Iterator<Entity> iterator = entities.iterator();
                 while (iterator.hasNext()) {
                     Entity entity = iterator.next();
-                    //noinspection ConstantValue - getEntitySpawnReason annotated as NotNull, but is not NotNull. lol.
-                    if (PaperLib.isPaper() && entity.getEntitySpawnReason() != null && "CUSTOM".equals(entity.getEntitySpawnReason().name())) {
-                        continue;
-                    }
-                    // Fallback for Spigot not having Entity#getEntitySpawnReason
-                    if (entity.getMetadata("ps_custom_spawned").stream().anyMatch(MetadataValue::asBoolean)) {
-                        continue;
-                    }
-                    // TODO: use (type) pattern matching when targeting java 21
-                    switch (entity.getType().toString()) {
-                        case "EGG":
-                        case "FISHING_HOOK", "FISHING_BOBBER":
-                        case "ENDER_SIGNAL", "EYE_OF_ENDER":
-                        case "AREA_EFFECT_CLOUD":
-                        case "EXPERIENCE_ORB":
-                        case "LEASH_HITCH", "LEASH_KNOT":
-                        case "FIREWORK", "FIREWORK_ROCKET":
-                        case "LIGHTNING", "LIGHTNING_BOLT":
-                        case "WITHER_SKULL":
-                        case "UNKNOWN":
-                        case "PLAYER":
-                            // non moving / unmovable
-                            continue;
-                        case "THROWN_EXP_BOTTLE", "EXPERIENCE_BOTTLE":
-                        case "SPLASH_POTION", "POTION":
-                        case "SNOWBALL":
-                        case "SHULKER_BULLET":
-                        case "SPECTRAL_ARROW":
-                        case "ENDER_PEARL":
-                        case "ARROW":
-                        case "LLAMA_SPIT":
-                        case "TRIDENT":
-                            // managed elsewhere | projectile
-                            continue;
-                        case "ITEM_FRAME":
-                        case "PAINTING":
-                            // Not vehicles
-                            continue;
-                        case "ARMOR_STAND":
-                            // Temporarily classify as vehicle
-                        case "MINECART":
-                        case "MINECART_CHEST":
-                        case "CHEST_MINECART":
-                        case "MINECART_COMMAND":
-                        case "COMMAND_BLOCK_MINECART":
-                        case "MINECART_FURNACE":
-                        case "FURNACE_MINECART":
-                        case "MINECART_HOPPER":
-                        case "HOPPER_MINECART":
-                        case "MINECART_MOB_SPAWNER":
-                        case "SPAWNER_MINECART":
-                        case "END_CRYSTAL":
-                        case "ENDER_CRYSTAL": // Backwards compatibility for 1.20.4
-                        case "MINECART_TNT":
-                        case "TNT_MINECART":
-                        case "CHEST_BOAT":
-                        case "BOAT":
-                        case "ACACIA_BOAT", "BIRCH_BOAT", "CHERRY_BOAT", "DARK_OAK_BOAT", "JUNGLE_BOAT", "MANGROVE_BOAT",
-                             "OAK_BOAT", "PALE_OAK_BOAT", "SPRUCE_BOAT", "BAMBOO_RAFT":
-                        case "ACACIA_CHEST_BOAT", "BIRCH_CHEST_BOAT", "CHERRY_CHEST_BOAT", "DARK_OAK_CHEST_BOAT",
-                             "JUNGLE_CHEST_BOAT", "MANGROVE_CHEST_BOAT", "OAK_CHEST_BOAT", "PALE_OAK_CHEST_BOAT",
-                             "SPRUCE_CHEST_BOAT", "BAMBOO_CHEST_RAFT":
-                            if (Settings.Enabled_Components.KILL_ROAD_VEHICLES) {
-                                com.plotsquared.core.location.Location location = BukkitUtil.adapt(entity.getLocation());
-                                Plot plot = location.getPlot();
-                                if (plot == null) {
-                                    if (location.isPlotArea()) {
-                                        if (entity.hasMetadata("ps-tmp-teleport")) {
-                                            continue;
-                                        }
-                                        this.removeRoadEntity(entity, iterator);
-                                    }
-                                    continue;
-                                }
-                                List<MetadataValue> meta = entity.getMetadata("plot");
-                                if (meta.isEmpty()) {
-                                    continue;
-                                }
-                                Plot origin = (Plot) meta.get(0).value();
-                                if (!plot.equals(origin.getBasePlot(false))) {
-                                    if (entity.hasMetadata("ps-tmp-teleport")) {
-                                        continue;
-                                    }
-                                    this.removeRoadEntity(entity, iterator);
-                                }
-                            }
-                            continue;
-                        case "SMALL_FIREBALL":
-                        case "FIREBALL":
-                        case "DRAGON_FIREBALL":
-                        case "DROPPED_ITEM", "ITEM":
-                            if (Settings.Enabled_Components.KILL_ROAD_ITEMS
-                                    && plotArea.getOwnedPlotAbs(BukkitUtil.adapt(entity.getLocation())) == null) {
-                                this.removeRoadEntity(entity, iterator);
-                            }
-                            // dropped item
-                            continue;
-                        case "PRIMED_TNT", "TNT":
-                        case "FALLING_BLOCK":
-                            // managed elsewhere
-                            continue;
-                        case "SHULKER":
-                            if (Settings.Enabled_Components.KILL_ROAD_MOBS && (Settings.Enabled_Components.KILL_NAMED_ROAD_MOBS || entity.getCustomName() == null)) {
-                                LivingEntity livingEntity = (LivingEntity) entity;
-                                List<MetadataValue> meta = entity.getMetadata("shulkerPlot");
-                                if (!meta.isEmpty()) {
-                                    if (livingEntity.isLeashed() && !Settings.Enabled_Components.KILL_OWNED_ROAD_MOBS) {
-                                        continue;
-                                    }
-                                    if (entity.hasMetadata("keep")) {
-                                        continue;
-                                    }
-
-                                    PlotId originalPlotId = (PlotId) meta.get(0).value();
-                                    if (originalPlotId != null) {
-                                        com.plotsquared.core.location.Location pLoc = BukkitUtil.adapt(entity.getLocation());
-                                        PlotArea area = pLoc.getPlotArea();
-                                        if (area != null) {
-                                            Plot currentPlot = area.getPlotAbs(pLoc);
-                                            if (currentPlot == null || !originalPlotId.equals(currentPlot.getId())) {
-                                                if (entity.hasMetadata("ps-tmp-teleport")) {
-                                                    continue;
-                                                }
-                                                this.removeRoadEntity(entity, iterator);
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    //This is to apply the metadata to already spawned shulkers (see EntitySpawnListener.java)
-                                    com.plotsquared.core.location.Location pLoc = BukkitUtil.adapt(entity.getLocation());
-                                    PlotArea area = pLoc.getPlotArea();
-                                    if (area != null) {
-                                        Plot currentPlot = area.getPlotAbs(pLoc);
-                                        if (currentPlot != null) {
-                                            entity.setMetadata(
-                                                    "shulkerPlot",
-                                                    new FixedMetadataValue((Plugin) PlotSquared.platform(), currentPlot.getId())
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                            continue;
-                        case "ZOMBIFIED_PIGLIN":
-                        case "PIGLIN_BRUTE":
-                        case "LLAMA":
-                        case "DONKEY":
-                        case "MULE":
-                        case "ZOMBIE_HORSE":
-                        case "SKELETON_HORSE":
-                        case "HUSK":
-                        case "ELDER_GUARDIAN":
-                        case "WITHER_SKELETON":
-                        case "STRAY":
-                        case "ZOMBIE_VILLAGER":
-                        case "EVOKER":
-                        case "EVOKER_FANGS":
-                        case "VEX":
-                        case "VINDICATOR":
-                        case "POLAR_BEAR":
-                        case "BAT":
-                        case "BLAZE":
-                        case "CAVE_SPIDER":
-                        case "CHICKEN":
-                        case "COW":
-                        case "CREEPER":
-                        case "ENDERMAN":
-                        case "ENDERMITE":
-                        case "ENDER_DRAGON":
-                        case "GHAST":
-                        case "HAPPY_GHAST": // 1.21.6+
-                        case "GHASTLING": // 1.21.6+
-                        case "GIANT":
-                        case "GUARDIAN":
-                        case "HORSE":
-                        case "IRON_GOLEM":
-                        case "MAGMA_CUBE":
-                        case "MUSHROOM_COW", "MOOSHROOM":
-                        case "OCELOT":
-                        case "PIG":
-                        case "PIG_ZOMBIE":
-                        case "RABBIT":
-                        case "SHEEP":
-                        case "SILVERFISH":
-                        case "SKELETON":
-                        case "SLIME":
-                        case "SNOWMAN", "SNOW_GOLEM":
-                        case "SPIDER":
-                        case "SQUID":
-                        case "VILLAGER":
-                        case "WITCH":
-                        case "WITHER":
-                        case "WOLF":
-                        case "ZOMBIE":
-                        case "PARROT":
-                        case "SALMON":
-                        case "DOLPHIN":
-                        case "TROPICAL_FISH":
-                        case "DROWNED":
-                        case "COD":
-                        case "TURTLE":
-                        case "PUFFERFISH":
-                        case "PHANTOM":
-                        case "ILLUSIONER":
-                        case "CAT":
-                        case "PANDA":
-                        case "FOX":
-                        case "PILLAGER":
-                        case "TRADER_LLAMA":
-                        case "WANDERING_TRADER":
-                        case "RAVAGER":
-                        case "BEE":
-                        case "HOGLIN":
-                        case "PIGLIN":
-                        case "ZOGLIN":
-                        default: {
-                            if (Settings.Enabled_Components.KILL_ROAD_MOBS) {
-                                Location location = entity.getLocation();
-                                if (BukkitUtil.adapt(location).isPlotRoad()) {
-                                    if (entity instanceof LivingEntity livingEntity) {
-                                        if ((Settings.Enabled_Components.KILL_OWNED_ROAD_MOBS || !livingEntity.isLeashed())
-                                                || !entity.hasMetadata("keep")) {
-                                            Entity passenger = entity.getPassenger();
-                                            if ((Settings.Enabled_Components.KILL_OWNED_ROAD_MOBS
-                                                    || !((passenger instanceof Player) || livingEntity.isLeashed()))
-                                                    && (Settings.Enabled_Components.KILL_NAMED_ROAD_MOBS || entity.getCustomName() == null)
-                                                    && entity.getMetadata("keep").isEmpty()) {
-                                                if (entity.hasMetadata("ps-tmp-teleport")) {
-                                                    continue;
-                                                }
-                                                this.removeRoadEntity(entity, iterator);
-                                            }
-                                        }
-                                    } else {
-                                        Entity passenger = entity.getPassenger();
-                                        if ((Settings.Enabled_Components.KILL_OWNED_ROAD_MOBS || !(passenger instanceof Player))
-                                                && (Settings.Enabled_Components.KILL_NAMED_ROAD_MOBS && entity.getCustomName() != null)
-                                                && entity.getMetadata("keep").isEmpty()) {
-                                            if (entity.hasMetadata("ps-tmp-teleport")) {
-                                                continue;
-                                            }
-                                            this.removeRoadEntity(entity, iterator);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    this.handleRoadEntity(plotArea, entity, iterator);
                 }
             } catch (Throwable e) {
                 e.printStackTrace();
             }
         }), TaskTime.seconds(1L));
+    }
+
+    @SuppressWarnings("deprecation")
+    private void handleRoadEntity(final PlotArea plotArea, final Entity entity, final @Nullable Iterator<Entity> entityIterator) {
+        //noinspection ConstantValue - getEntitySpawnReason annotated as NotNull, but is not NotNull. lol.
+        if (PaperLib.isPaper() && entity.getEntitySpawnReason() != null && "CUSTOM".equals(entity.getEntitySpawnReason().name())) {
+            return;
+        }
+        if (entity.getMetadata("ps_custom_spawned").stream().anyMatch(MetadataValue::asBoolean)) {
+            return;
+        }
+        switch (entity.getType().toString()) {
+            case "EGG":
+            case "FISHING_HOOK", "FISHING_BOBBER":
+            case "ENDER_SIGNAL", "EYE_OF_ENDER":
+            case "AREA_EFFECT_CLOUD":
+            case "EXPERIENCE_ORB":
+            case "LEASH_HITCH", "LEASH_KNOT":
+            case "FIREWORK", "FIREWORK_ROCKET":
+            case "LIGHTNING", "LIGHTNING_BOLT":
+            case "WITHER_SKULL":
+            case "UNKNOWN":
+            case "PLAYER":
+            case "THROWN_EXP_BOTTLE", "EXPERIENCE_BOTTLE":
+            case "SPLASH_POTION", "POTION":
+            case "SNOWBALL":
+            case "SHULKER_BULLET":
+            case "SPECTRAL_ARROW":
+            case "ENDER_PEARL":
+            case "ARROW":
+            case "LLAMA_SPIT":
+            case "TRIDENT":
+            case "ITEM_FRAME":
+            case "PAINTING":
+            case "PRIMED_TNT", "TNT":
+            case "FALLING_BLOCK":
+                return;
+            case "ARMOR_STAND":
+            case "MINECART":
+            case "MINECART_CHEST":
+            case "CHEST_MINECART":
+            case "MINECART_COMMAND":
+            case "COMMAND_BLOCK_MINECART":
+            case "MINECART_FURNACE":
+            case "FURNACE_MINECART":
+            case "MINECART_HOPPER":
+            case "HOPPER_MINECART":
+            case "MINECART_MOB_SPAWNER":
+            case "SPAWNER_MINECART":
+            case "END_CRYSTAL":
+            case "ENDER_CRYSTAL":
+            case "MINECART_TNT":
+            case "TNT_MINECART":
+            case "CHEST_BOAT":
+            case "BOAT":
+            case "ACACIA_BOAT", "BIRCH_BOAT", "CHERRY_BOAT", "DARK_OAK_BOAT", "JUNGLE_BOAT", "MANGROVE_BOAT",
+                    "OAK_BOAT", "PALE_OAK_BOAT", "SPRUCE_BOAT", "BAMBOO_RAFT":
+            case "ACACIA_CHEST_BOAT", "BIRCH_CHEST_BOAT", "CHERRY_CHEST_BOAT", "DARK_OAK_CHEST_BOAT",
+                    "JUNGLE_CHEST_BOAT", "MANGROVE_CHEST_BOAT", "OAK_CHEST_BOAT", "PALE_OAK_CHEST_BOAT",
+                    "SPRUCE_CHEST_BOAT", "BAMBOO_CHEST_RAFT":
+                if (!Settings.Enabled_Components.KILL_ROAD_VEHICLES) {
+                    return;
+                }
+                com.plotsquared.core.location.Location vehicleLocation = BukkitUtil.adapt(entity.getLocation());
+                Plot vehiclePlot = vehicleLocation.getPlot();
+                if (vehiclePlot == null) {
+                    if (vehicleLocation.isPlotArea() && !entity.hasMetadata("ps-tmp-teleport")) {
+                        this.removeRoadEntitySafely(entity, entityIterator);
+                    }
+                    return;
+                }
+                List<MetadataValue> plotMeta = entity.getMetadata("plot");
+                if (plotMeta.isEmpty()) {
+                    return;
+                }
+                Plot origin = (Plot) plotMeta.get(0).value();
+                if (!vehiclePlot.equals(origin.getBasePlot(false)) && !entity.hasMetadata("ps-tmp-teleport")) {
+                    this.removeRoadEntitySafely(entity, entityIterator);
+                }
+                return;
+            case "SMALL_FIREBALL":
+            case "FIREBALL":
+            case "DRAGON_FIREBALL":
+            case "DROPPED_ITEM", "ITEM":
+                if (Settings.Enabled_Components.KILL_ROAD_ITEMS
+                        && plotArea.getOwnedPlotAbs(BukkitUtil.adapt(entity.getLocation())) == null) {
+                    this.removeRoadEntitySafely(entity, entityIterator);
+                }
+                return;
+            case "SHULKER":
+                if (!Settings.Enabled_Components.KILL_ROAD_MOBS
+                        || (!Settings.Enabled_Components.KILL_NAMED_ROAD_MOBS && entity.getCustomName() != null)) {
+                    return;
+                }
+                LivingEntity shulker = (LivingEntity) entity;
+                List<MetadataValue> shulkerMeta = entity.getMetadata("shulkerPlot");
+                if (!shulkerMeta.isEmpty()) {
+                    if ((shulker.isLeashed() && !Settings.Enabled_Components.KILL_OWNED_ROAD_MOBS) || entity.hasMetadata("keep")) {
+                        return;
+                    }
+                    PlotId originalPlotId = (PlotId) shulkerMeta.get(0).value();
+                    if (originalPlotId != null) {
+                        com.plotsquared.core.location.Location pLoc = BukkitUtil.adapt(entity.getLocation());
+                        PlotArea area = pLoc.getPlotArea();
+                        if (area != null) {
+                            Plot currentPlot = area.getPlotAbs(pLoc);
+                            if ((currentPlot == null || !originalPlotId.equals(currentPlot.getId())) && !entity.hasMetadata("ps-tmp-teleport")) {
+                                this.removeRoadEntitySafely(entity, entityIterator);
+                            }
+                        }
+                    }
+                } else {
+                    com.plotsquared.core.location.Location pLoc = BukkitUtil.adapt(entity.getLocation());
+                    PlotArea area = pLoc.getPlotArea();
+                    if (area != null) {
+                        Plot currentPlot = area.getPlotAbs(pLoc);
+                        if (currentPlot != null) {
+                            entity.setMetadata("shulkerPlot", new FixedMetadataValue((Plugin) PlotSquared.platform(), currentPlot.getId()));
+                        }
+                    }
+                }
+                return;
+            default:
+                if (!Settings.Enabled_Components.KILL_ROAD_MOBS) {
+                    return;
+                }
+                Location location = entity.getLocation();
+                if (!BukkitUtil.adapt(location).isPlotRoad()) {
+                    return;
+                }
+                if (entity instanceof LivingEntity livingEntity) {
+                    if ((Settings.Enabled_Components.KILL_OWNED_ROAD_MOBS || !livingEntity.isLeashed()) || !entity.hasMetadata("keep")) {
+                        Entity passenger = entity.getPassenger();
+                        if ((Settings.Enabled_Components.KILL_OWNED_ROAD_MOBS || !((passenger instanceof Player) || livingEntity.isLeashed()))
+                                && (Settings.Enabled_Components.KILL_NAMED_ROAD_MOBS || entity.getCustomName() == null)
+                                && entity.getMetadata("keep").isEmpty()
+                                && !entity.hasMetadata("ps-tmp-teleport")) {
+                            this.removeRoadEntitySafely(entity, entityIterator);
+                        }
+                    }
+                } else {
+                    Entity passenger = entity.getPassenger();
+                    if ((Settings.Enabled_Components.KILL_OWNED_ROAD_MOBS || !(passenger instanceof Player))
+                            && (Settings.Enabled_Components.KILL_NAMED_ROAD_MOBS && entity.getCustomName() != null)
+                            && entity.getMetadata("keep").isEmpty()
+                            && !entity.hasMetadata("ps-tmp-teleport")) {
+                        this.removeRoadEntitySafely(entity, entityIterator);
+                    }
+                }
+        }
     }
 
     private void removeRoadEntity(Entity entity, Iterator<Entity> entityIterator) {
@@ -1065,6 +979,17 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
 
         entityIterator.remove();
         entity.remove();
+    }
+
+    private void removeRoadEntitySafely(Entity entity, final @Nullable Iterator<Entity> entityIterator) {
+        if (entityIterator == null) {
+            RemoveRoadEntityEvent event = eventDispatcher.callRemoveRoadEntity(BukkitAdapter.adapt(entity));
+            if (event.getEventResult() != Result.DENY) {
+                entity.remove();
+            }
+            return;
+        }
+        removeRoadEntity(entity, entityIterator);
     }
 
     @Override
