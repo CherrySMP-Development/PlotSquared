@@ -18,7 +18,9 @@
  */
 package com.plotsquared.bukkit.generator;
 
+import com.plotsquared.bukkit.BukkitPlatform;
 import com.plotsquared.bukkit.queue.GenChunk;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.bukkit.util.BukkitUtil;
 import com.plotsquared.bukkit.util.BukkitWorld;
 import com.plotsquared.core.PlotSquared;
@@ -170,18 +172,29 @@ public class BukkitPlotGenerator extends ChunkGenerator implements GeneratorWrap
             final Set<PlotArea> areas = this.plotAreaManager.getPlotAreasSet(name);
             if (!areas.isEmpty()) {
                 PlotArea area = areas.iterator().next();
-                if (!area.isMobSpawning()) {
-                    if (!area.isSpawnEggs()) {
-                        world.setSpawnFlags(false, false);
-                    }
-                    setSpawnLimits(world, 0);
-                } else {
-                    world.setSpawnFlags(true, true);
-                    setSpawnLimits(world, -1);
-                }
+                applySpawnSettings(world, area);
             }
             this.loaded = true;
         }
+    }
+
+    private void applySpawnSettings(final @NonNull World world, final @NonNull PlotArea area) {
+        final Runnable task = () -> {
+            if (!area.isMobSpawning()) {
+                if (!area.isSpawnEggs()) {
+                    world.setSpawnFlags(false, false);
+                }
+                setSpawnLimits(world, 0);
+            } else {
+                world.setSpawnFlags(true, true);
+                setSpawnLimits(world, -1);
+            }
+        };
+        if (FoliaCompat.isFolia() && !FoliaCompat.isGlobalTickThread()) {
+            FoliaCompat.runGlobal(BukkitPlatform.getPlugin(BukkitPlatform.class), task);
+            return;
+        }
+        task.run();
     }
 
     @SuppressWarnings("deprecation") // Kept for compatibility with <=1.17.1
