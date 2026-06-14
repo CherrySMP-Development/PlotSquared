@@ -186,9 +186,7 @@ public final class BukkitChunkCoordinator extends ChunkCoordinator {
             return;
         }
         if (FoliaCompat.isFolia()) {
-            do {
-                this.processChunkOnOwnedRegion(chunk);
-            } while ((chunk = this.availableChunks.poll()) != null);
+            this.processChunkOnOwnedRegion(chunk);
             return;
         }
         long[] iterationTime = new long[2];
