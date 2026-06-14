@@ -232,6 +232,28 @@ public final class FoliaCompat {
         }
     }
 
+    public static <T> @NonNull T callAtLocation(
+            final @NonNull Plugin plugin,
+            final @NonNull Location location,
+            final @NonNull Function<Location, T> task
+    ) throws ExecutionException, InterruptedException {
+        if (!isFolia()) {
+            return task.apply(location);
+        }
+        if (isOwnedByCurrentRegion(location)) {
+            return task.apply(location);
+        }
+        final CompletableFuture<T> future = new CompletableFuture<>();
+        runAtLocation(plugin, location, () -> {
+            try {
+                future.complete(task.apply(location));
+            } catch (final Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        });
+        return future.get();
+    }
+
     public static void teleportEntity(
             final @NonNull Plugin plugin,
             final @NonNull Entity entity,
@@ -247,7 +269,7 @@ public final class FoliaCompat {
         }
         try {
             final Object scheduler = entity_getScheduler.invoke(entity);
-            entityScheduler_run.invoke(scheduler, plugin, consumer(() -> entity.teleport(location)), null);
+            entityScheduler_run.invoke(scheduler, plugin, consumer(() -> entity.teleportAsync(location)), null);
         } catch (final Throwable ignored) {
             PaperLib.teleportAsync(entity, location);
         }
@@ -308,7 +330,7 @@ public final class FoliaCompat {
         }
         try {
             final Object scheduler = entity_getScheduler.invoke(player);
-            entityScheduler_run.invoke(scheduler, plugin, consumer(() -> player.teleport(location, cause)), null);
+            entityScheduler_run.invoke(scheduler, plugin, consumer(() -> player.teleportAsync(location, cause)), null);
         } catch (final Throwable ignored) {
             PaperLib.teleportAsync(player, location, cause);
         }

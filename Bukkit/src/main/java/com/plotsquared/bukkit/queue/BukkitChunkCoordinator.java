@@ -21,6 +21,7 @@ package com.plotsquared.bukkit.queue;
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.plotsquared.bukkit.BukkitPlatform;
+import com.plotsquared.bukkit.util.FoliaCompat;
 import com.plotsquared.core.PlotSquared;
 import com.plotsquared.core.queue.ChunkCoordinator;
 import com.plotsquared.core.queue.subscriber.ProgressSubscriber;
@@ -29,7 +30,6 @@ import com.plotsquared.core.util.task.TaskManager;
 import com.plotsquared.core.util.task.TaskTime;
 import com.sk89q.worldedit.math.BlockVector2;
 import com.sk89q.worldedit.world.World;
-import io.papermc.lib.PaperLib;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bukkit.Bukkit;
@@ -225,8 +225,8 @@ public final class BukkitChunkCoordinator extends ChunkCoordinator {
             // This required PaperLib to be bumped to version 1.0.4 to mark the request as urgent
             final BlockVector2 chunk = this.requestedChunks.poll();
             loadingChunks.incrementAndGet();
-            PaperLib
-                    .getChunkAtAsync(this.bukkitWorld, chunk.getX(), chunk.getZ(), shouldGen, true)
+            this.bukkitWorld
+                    .getChunkAtAsync(chunk.getX(), chunk.getZ(), shouldGen, true)
                     .orTimeout(10L, TimeUnit.SECONDS)
                     .whenComplete((chunkObject, throwable) -> {
                         loadingChunks.decrementAndGet();
@@ -243,6 +243,14 @@ public final class BukkitChunkCoordinator extends ChunkCoordinator {
                             if (shouldGen) {
                                 LOGGER.error("Null chunk returned for chunk at {}", chunk);
                             }
+                        } else if (FoliaCompat.isFolia()) {
+                            final org.bukkit.Location chunkLocation = new org.bukkit.Location(
+                                    chunkObject.getWorld(),
+                                    chunkObject.getX() << 4,
+                                    0,
+                                    chunkObject.getZ() << 4
+                            );
+                            FoliaCompat.runAtLocation(this.plugin, chunkLocation, () -> this.processChunk(chunkObject));
                         } else if (PlotSquared.get().isMainThread(Thread.currentThread())) {
                             this.processChunk(chunkObject);
                         } else {

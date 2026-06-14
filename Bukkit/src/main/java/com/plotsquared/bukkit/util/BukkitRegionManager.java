@@ -41,7 +41,6 @@ import com.sk89q.worldedit.bukkit.BukkitWorld;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.world.block.BaseBlock;
 import com.sk89q.worldedit.world.block.BlockTypes;
-import io.papermc.lib.PaperLib;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.World;
@@ -53,6 +52,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import static com.plotsquared.core.util.entity.EntityCategories.CAP_ANIMAL;
@@ -126,7 +126,7 @@ public class BukkitRegionManager extends RegionManager {
         if (doWhole) {
             for (Entity entity : entities) {
                 org.bukkit.Location location = entity.getLocation();
-                PaperLib.getChunkAtAsync(location).thenAccept(chunk -> {
+                Objects.requireNonNull(location.getWorld()).getChunkAtAsync(location, true).thenAccept(chunk -> {
                     if (chunks.contains(chunk)) {
                         int X = chunk.getX();
                         int Z = chunk.getZ();

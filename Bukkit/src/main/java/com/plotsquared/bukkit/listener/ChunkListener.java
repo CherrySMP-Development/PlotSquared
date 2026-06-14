@@ -33,7 +33,6 @@ import com.plotsquared.core.util.ReflectionUtils.RefMethod;
 import com.plotsquared.core.util.task.PlotSquaredTask;
 import com.plotsquared.core.util.task.TaskManager;
 import com.plotsquared.core.util.task.TaskTime;
-import io.papermc.lib.PaperLib;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bukkit.Bukkit;
@@ -216,7 +215,7 @@ public class ChunkListener implements Listener {
     }
 
     private void onInternalEntitySpawn(EntitySpawnEvent event) {
-        PaperLib.getChunkAtAsync(event.getLocation()).thenAccept(chunk -> {
+        Objects.requireNonNull(event.getLocation().getWorld()).getChunkAtAsync(event.getLocation(), true).thenAccept(chunk -> {
             if (chunk == this.lastChunk) {
                 event.getEntity().remove();
                 event.setCancelled(true);

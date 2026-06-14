@@ -22,7 +22,7 @@ import com.google.inject.Singleton;
 import com.plotsquared.core.util.ChunkManager;
 import com.sk89q.worldedit.math.BlockVector2;
 import com.sk89q.worldedit.regions.CuboidRegion;
-import io.papermc.lib.PaperLib;
+import org.bukkit.World;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -38,7 +38,10 @@ public class BukkitChunkManager extends ChunkManager {
 
     @Override
     public CompletableFuture<?> loadChunk(String world, BlockVector2 chunkLoc, boolean force) {
-        return PaperLib.getChunkAtAsync(BukkitUtil.getWorld(world), chunkLoc.getX(), chunkLoc.getZ(), force);
+        final World bukkitWorld = BukkitUtil.getWorld(world);
+        return bukkitWorld == null
+                ? CompletableFuture.completedFuture(null)
+                : bukkitWorld.getChunkAtAsync(chunkLoc.getX(), chunkLoc.getZ(), force);
     }
 
 }

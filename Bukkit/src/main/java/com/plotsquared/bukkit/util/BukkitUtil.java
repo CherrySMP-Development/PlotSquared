@@ -193,12 +193,15 @@ public class BukkitUtil extends WorldUtil {
             final int z,
             final @NonNull Consumer<Chunk> chunkConsumer
     ) {
-        PaperLib.getChunkAtAsync(Objects.requireNonNull(getWorld(world)), x >> 4, z >> 4, true)
-                .thenAccept(chunk -> runChunkConsumer(chunkConsumer, chunk));
+        final World bukkitWorld = Objects.requireNonNull(getWorld(world));
+        bukkitWorld.getChunkAtAsync(x >> 4, z >> 4, true).thenAccept(chunk -> runChunkConsumer(chunkConsumer, chunk));
     }
 
     private static void ensureLoaded(final @NonNull Location location, final @NonNull Consumer<Chunk> chunkConsumer) {
-        PaperLib.getChunkAtAsync(adapt(location), true).thenAccept(chunk -> runChunkConsumer(chunkConsumer, chunk));
+        final org.bukkit.Location bukkitLocation = adapt(location);
+        Objects.requireNonNull(bukkitLocation.getWorld())
+                .getChunkAtAsync(bukkitLocation, true)
+                .thenAccept(chunk -> runChunkConsumer(chunkConsumer, chunk));
     }
 
     private static void runChunkConsumer(final @NonNull Consumer<Chunk> consumer, final @NonNull Chunk chunk) {
@@ -235,7 +238,20 @@ public class BukkitUtil extends WorldUtil {
 
     @Override
     public @NonNull BiomeType getBiomeSynchronous(final @NonNull String world, final int x, final int z) {
-        return BukkitAdapter.adapt(Objects.requireNonNull(getWorld(world)).getBiome(x, z));
+        final World bukkitWorld = Objects.requireNonNull(getWorld(world));
+        final org.bukkit.Location location = new org.bukkit.Location(bukkitWorld, x, bukkitWorld.getMinHeight(), z);
+        try {
+            return FoliaCompat.callAtLocation(
+                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                    location,
+                    ignored -> BukkitAdapter.adapt(bukkitWorld.getBiome(x, z))
+            );
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (final ExecutionException e) {
+            throw new RuntimeException(e.getCause() == null ? e : e.getCause());
+        }
     }
 
     @Override
@@ -269,49 +285,79 @@ public class BukkitUtil extends WorldUtil {
 
     @Override
     public boolean isSmallBlock(Location location) {
-        return adapt(location).getBlock().getBoundingBox().getHeight() < 0.25;
+        final org.bukkit.Location bukkitLocation = adapt(location);
+        try {
+            return FoliaCompat.callAtLocation(
+                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                    bukkitLocation,
+                    ignored -> bukkitLocation.getBlock().getBoundingBox().getHeight() < 0.25
+            );
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (final ExecutionException e) {
+            throw new RuntimeException(e.getCause() == null ? e : e.getCause());
+        }
     }
 
     @Override
     @NonNegative
     public int getHighestBlockSynchronous(final @NonNull String world, final int x, final int z) {
         final World bukkitWorld = Objects.requireNonNull(getWorld(world));
-        // Skip top and bottom block
-        int air = 1;
-        int maxY = com.plotsquared.bukkit.util.BukkitWorld.getMaxWorldHeight(bukkitWorld);
-        int minY = com.plotsquared.bukkit.util.BukkitWorld.getMinWorldHeight(bukkitWorld);
-        for (int y = maxY - 1; y >= minY; y--) {
-            Block block = bukkitWorld.getBlockAt(x, y, z);
-            Material type = block.getType();
-            if (type.isSolid()) {
-                if (air > 1) {
-                    return y;
-                }
-                air = 0;
-            } else {
-                if (block.isLiquid()) {
-                    return y;
-                }
-                air++;
-            }
+        final org.bukkit.Location location = new org.bukkit.Location(bukkitWorld, x, bukkitWorld.getMinHeight(), z);
+        try {
+            return FoliaCompat.callAtLocation(
+                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                    location,
+                    ignored -> {
+                        int air = 1;
+                        int maxY = com.plotsquared.bukkit.util.BukkitWorld.getMaxWorldHeight(bukkitWorld);
+                        int minY = com.plotsquared.bukkit.util.BukkitWorld.getMinWorldHeight(bukkitWorld);
+                        for (int y = maxY - 1; y >= minY; y--) {
+                            Block block = bukkitWorld.getBlockAt(x, y, z);
+                            Material type = block.getType();
+                            if (type.isSolid()) {
+                                if (air > 1) {
+                                    return y;
+                                }
+                                air = 0;
+                            } else {
+                                if (block.isLiquid()) {
+                                    return y;
+                                }
+                                air++;
+                            }
+                        }
+                        return bukkitWorld.getMaxHeight() - 1;
+                    }
+            );
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (final ExecutionException e) {
+            throw new RuntimeException(e.getCause() == null ? e : e.getCause());
         }
-        return bukkitWorld.getMaxHeight() - 1;
     }
 
     @Override
     public @NonNull String[] getSignSynchronous(final @NonNull Location location) {
-        Block block = Objects.requireNonNull(getWorld(location.getWorldName())).getBlockAt(
-                location.getX(),
-                location.getY(),
-                location.getZ()
-        );
         try {
-            return TaskManager.getPlatformImplementation().sync(() -> {
-                if (block.getState() instanceof Sign sign) {
-                    return sign.getLines();
-                }
-                return new String[0];
-            });
+            final org.bukkit.Location bukkitLocation = adapt(location);
+            return FoliaCompat.callAtLocation(
+                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                    bukkitLocation,
+                    ignored -> {
+                        Block block = Objects.requireNonNull(getWorld(location.getWorldName())).getBlockAt(
+                                location.getX(),
+                                location.getY(),
+                                location.getZ()
+                        );
+                        if (block.getState() instanceof Sign sign) {
+                            return sign.getLines();
+                        }
+                        return new String[0];
+                    }
+            );
         } catch (final Exception e) {
             e.printStackTrace();
         }
@@ -412,9 +458,23 @@ public class BukkitUtil extends WorldUtil {
 
     @Override
     public @NonNull BlockState getBlockSynchronous(final @NonNull Location location) {
-        final World world = getWorld(location.getWorldName());
-        final Block block = Objects.requireNonNull(world).getBlockAt(location.getX(), location.getY(), location.getZ());
-        return Objects.requireNonNull(BukkitAdapter.asBlockType(block.getType())).getDefaultState();
+        final org.bukkit.Location bukkitLocation = adapt(location);
+        try {
+            return FoliaCompat.callAtLocation(
+                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                    bukkitLocation,
+                    ignored -> {
+                        final World world = getWorld(location.getWorldName());
+                        final Block block = Objects.requireNonNull(world).getBlockAt(location.getX(), location.getY(), location.getZ());
+                        return Objects.requireNonNull(BukkitAdapter.asBlockType(block.getType())).getDefaultState();
+                    }
+            );
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (final ExecutionException e) {
+            throw new RuntimeException(e.getCause() == null ? e : e.getCause());
+        }
     }
 
     @Override
@@ -566,8 +626,25 @@ public class BukkitUtil extends WorldUtil {
     @Override
     @NonNegative
     public int getTileEntityCount(final @NonNull String world, final @NonNull BlockVector2 chunk) {
-        return Objects.requireNonNull(getWorld(world)).
-                getChunkAt(chunk.getBlockX(), chunk.getBlockZ()).getTileEntities().length;
+        final World bukkitWorld = Objects.requireNonNull(getWorld(world));
+        final org.bukkit.Location chunkLocation = new org.bukkit.Location(
+                bukkitWorld,
+                chunk.getBlockX() << 4,
+                bukkitWorld.getMinHeight(),
+                chunk.getBlockZ() << 4
+        );
+        try {
+            return FoliaCompat.callAtLocation(
+                    BukkitPlatform.getPlugin(BukkitPlatform.class),
+                    chunkLocation,
+                    ignored -> bukkitWorld.getChunkAt(chunk.getBlockX(), chunk.getBlockZ()).getTileEntities().length
+            );
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (final ExecutionException e) {
+            throw new RuntimeException(e.getCause() == null ? e : e.getCause());
+        }
     }
 
     @Override
