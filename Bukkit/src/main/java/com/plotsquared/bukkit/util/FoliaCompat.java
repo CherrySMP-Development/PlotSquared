@@ -224,7 +224,7 @@ public final class FoliaCompat {
             final @NonNull Plugin plugin,
             final @NonNull Player player,
             final @NonNull Location location,
-            final @NonNull PlayerTeleportEvent.TeleportCause cause
+            final PlayerTeleportEvent.TeleportCause cause
     ) {
         if (!isFolia()) {
             PaperLib.teleportAsync(player, location, cause);

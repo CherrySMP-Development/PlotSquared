@@ -20,6 +20,7 @@ package com.plotsquared.bukkit.util;
 
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import com.plotsquared.bukkit.BukkitPlatform;
 import com.plotsquared.bukkit.generator.BukkitPlotGenerator;
 import com.plotsquared.core.PlotSquared;
 import com.plotsquared.core.configuration.ConfigurationNode;
