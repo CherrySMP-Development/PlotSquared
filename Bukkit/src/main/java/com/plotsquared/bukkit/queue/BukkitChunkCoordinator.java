@@ -46,6 +46,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -75,13 +76,15 @@ public final class BukkitChunkCoordinator extends ChunkCoordinator {
     private final int totalSize;
     private final AtomicInteger expectedSize;
     private final AtomicInteger loadingChunks = new AtomicInteger();
+    private final AtomicInteger processingChunks = new AtomicInteger();
     private final boolean forceSync;
     private final boolean shouldGen;
 
     private int batchSize;
     private PlotSquaredTask task;
     private volatile boolean shouldCancel;
-    private boolean finished;
+    private volatile boolean finished;
+    private final AtomicBoolean finishing = new AtomicBoolean();
 
     @Inject
     private BukkitChunkCoordinator(
@@ -140,6 +143,9 @@ public final class BukkitChunkCoordinator extends ChunkCoordinator {
     }
 
     private void finish() {
+        if (!this.finishing.compareAndSet(false, true)) {
+            return;
+        }
         try {
             this.whenDone.run();
         } catch (final Throwable throwable) {
@@ -171,12 +177,18 @@ public final class BukkitChunkCoordinator extends ChunkCoordinator {
         Chunk chunk = this.availableChunks.poll();
         if (chunk == null) {
             if (this.availableChunks.isEmpty()) {
-                if (this.requestedChunks.isEmpty() && loadingChunks.get() == 0) {
+                if (this.requestedChunks.isEmpty() && loadingChunks.get() == 0 && this.processingChunks.get() == 0) {
                     finish();
                 } else {
                     requestBatch();
                 }
             }
+            return;
+        }
+        if (FoliaCompat.isFolia()) {
+            do {
+                this.processChunkOnOwnedRegion(chunk);
+            } while ((chunk = this.availableChunks.poll()) != null);
             return;
         }
         long[] iterationTime = new long[2];
@@ -213,6 +225,49 @@ public final class BukkitChunkCoordinator extends ChunkCoordinator {
                     subscriber.notifyProgress(this, progress);
                 }
                 this.requestBatch();
+            }
+        }
+    }
+
+    private void processChunkOnOwnedRegion(final @NonNull Chunk chunk) {
+        this.processingChunks.incrementAndGet();
+        final org.bukkit.Location chunkLocation = new org.bukkit.Location(
+                chunk.getWorld(),
+                chunk.getX() << 4,
+                0,
+                chunk.getZ() << 4
+        );
+        FoliaCompat.runAtLocation(this.plugin, chunkLocation, () -> {
+            try {
+                if (!this.finished && !this.shouldCancel) {
+                    this.chunkConsumer.accept(BlockVector2.at(chunk.getX(), chunk.getZ()));
+                }
+                if (this.unloadAfter) {
+                    this.freeChunk(chunk);
+                }
+            } catch (final Throwable throwable) {
+                this.throwableConsumer.accept(throwable);
+            } finally {
+                this.onChunkProcessed();
+            }
+        });
+    }
+
+    private void onChunkProcessed() {
+        final int remainingProcessing = this.processingChunks.decrementAndGet();
+        final int expected = this.expectedSize.decrementAndGet();
+        if (expected <= 0) {
+            finish();
+            return;
+        }
+        final double progress = ((double) this.totalSize - (double) expected) / (double) this.totalSize;
+        for (final ProgressSubscriber subscriber : this.progressSubscribers) {
+            subscriber.notifyProgress(this, progress);
+        }
+        if (this.availableChunks.isEmpty()) {
+            this.requestBatch();
+            if (this.requestedChunks.isEmpty() && this.loadingChunks.get() == 0 && remainingProcessing == 0) {
+                finish();
             }
         }
     }
